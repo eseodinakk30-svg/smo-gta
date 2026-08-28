@@ -1,6 +1,7 @@
-# Временный диагностический workflow: печатает состояние раннера до и после
-# очистки диска. Нужен, чтобы понять, почему Unity Hub не может поставить
-# Android SDK Build Tools. Удалить, когда сборка APK заработает.
+# Временный диагностический workflow: ставит Unity с модулем Android и, что бы
+# ни случилось, выкладывает СОБСТВЕННЫЙ лог Unity Hub и список того, что реально
+# оказалось на диске. Голое "Installation Failed" в выводе экшена причины не
+# называет — она в логе Hub. Удалить, когда сборка APK заработает.
 name: "99. Диагностика раннера"
 
 on:
@@ -9,31 +10,50 @@ on:
 jobs:
   info:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
-      - name: Диск до очистки
-        run: df -h / && echo "---" && du -sh /usr/local/lib/android /opt/hostedtoolcache /usr/share/dotnet /usr/local/.ghcup /opt/az 2>/dev/null || true
-
-      - name: Переменные окружения Android
-        run: env | grep -i -E "android|java_home" | sort || echo "нет переменных Android"
+      - uses: actions/checkout@v4
 
       - name: Что лежит в SDK раннера
         run: |
-          ls /usr/local/lib/android/sdk 2>/dev/null || echo "нет /usr/local/lib/android/sdk"
-          echo "--- build-tools ---"
-          ls /usr/local/lib/android/sdk/build-tools 2>/dev/null || echo "нет build-tools"
-          echo "--- licenses ---"
-          ls /usr/local/lib/android/sdk/licenses 2>/dev/null || echo "нет licenses"
+          SDK=/usr/local/lib/android/sdk
+          for d in build-tools platforms platform-tools cmdline-tools ndk; do
+            echo "--- $d ---"; ls "$SDK/$d" 2>/dev/null || echo "нет"
+          done
 
-      - name: Диск после текущей очистки из workflow сборки
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc \
-                      /usr/local/share/boost /usr/share/swift || true
-          df -h /
+      - name: Поставить Unity Hub и починить путь к нему
+        uses: ./.github/actions/unity-hub
 
-      - name: Диск после расширенной очистки
+      - name: Установить Unity с модулем Android
+        id: setup
+        continue-on-error: true
+        uses: buildalon/unity-setup@v2
+        with:
+          version-file: ProjectSettings/ProjectVersion.txt
+          build-targets: Android
+          cache-installation: false
+
+      - name: Настоящая причина из лога Unity Hub
+        if: always()
         run: |
-          sudo rm -rf /opt/hostedtoolcache/CodeQL /usr/local/.ghcup /opt/az \
-                      /usr/local/share/powershell /usr/local/share/chromium || true
-          sudo docker image prune --all --force >/dev/null 2>&1 || true
-          df -h /
+          echo "=== итог шага установки: ${{ steps.setup.outcome }} ==="
+          for f in "$HOME/.config/UnityHub/logs/info-log.json" \
+                   "$HOME/.config/Unity Hub/logs/info-log.json"; do
+            [ -f "$f" ] || continue
+            echo "=== $f (строки со сбоем) ==="
+            grep -i -E "error|fail|denied|exists|rename|extract|EACCES|ENOENT" "$f" \
+              | tail -40
+          done
+          echo "=== все логи Hub, какие есть ==="
+          find "$HOME/.config" -iname "*.json" -path "*ogs*" 2>/dev/null | head
+
+      - name: Что реально установилось в Unity
+        if: always()
+        run: |
+          AP=/home/runner/Unity/Hub/Editor/2022.3.62f1/Editor/Data/PlaybackEngines/AndroidPlayer
+          echo "--- AndroidPlayer ---"; ls "$AP" 2>/dev/null || echo "нет AndroidPlayer"
+          echo "--- SDK Unity ---";     ls "$AP/SDK" 2>/dev/null || echo "нет SDK"
+          echo "--- build-tools ---";   ls "$AP/SDK/build-tools" 2>/dev/null || echo "нет build-tools"
+          echo "--- platforms ---";     ls "$AP/SDK/platforms" 2>/dev/null || echo "нет platforms"
+          echo "--- NDK ---";           ls "$AP/NDK" 2>/dev/null | head -5 || echo "нет NDK"
+          echo "--- OpenJDK ---";       ls "$AP/OpenJDK" 2>/dev/null | head -5 || echo "нет OpenJDK"

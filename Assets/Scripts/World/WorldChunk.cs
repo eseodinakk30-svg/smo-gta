@@ -50,6 +50,11 @@ namespace SanMonica.World
                 _collider.sharedMesh = null;
                 _collider.sharedMesh = _mesh;
                 _collider.convex = false;
+                // A recycled chunk that was last used at a distant LOD has its
+                // collider switched off below. Without turning it back on the
+                // tile renders but has no floor, and the player drops through a
+                // patch of city that looks perfectly solid.
+                _collider.enabled = true;
                 gameObject.layer = GameLayers.Ground;
             }
             else if (_collider != null)

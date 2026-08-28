@@ -53,12 +53,26 @@ namespace SanMonica.Players
         public bool IsCrouching { get; private set; }
         public bool IsAiming { get; private set; }
         public bool IsGrounded { get; private set; }
+
+        /// <summary>
+        /// Set while the world is still streaming in. The player exists so the
+        /// streamer and the population have something to centre on, but gravity
+        /// must not run: there are no colliders yet, and a few seconds of free
+        /// fall puts them kilometres under the city before the ground appears.
+        /// </summary>
+        public bool Frozen;
         public bool InVehicle => CurrentVehicle != null;
         public float CurrentSpeed { get; private set; }
         public string NearbyPrompt { get; private set; }
 
         private Vector3 _velocity;
         private float _verticalVelocity;
+
+        /// <summary>
+        /// Falling is capped well below the speed at which a CharacterController
+        /// starts stepping through thin colliders in a single frame.
+        /// </summary>
+        private const float TerminalVelocity = -55f;
         private float _fallStartY;
         private bool _wasGrounded = true;
         private float _vaultTimer;
@@ -142,6 +156,8 @@ namespace SanMonica.Players
                 return;
             }
 
+            if (Frozen) { CurrentSpeed = 0f; _verticalVelocity = 0f; return; }
+
             if (InVehicle) { UpdateInVehicle(dt, interactive); return; }
             if (!interactive) { ApplyGravityOnly(dt); return; }
 
@@ -160,7 +176,7 @@ namespace SanMonica.Players
         // ------------------------------------------------------------------
         private void ApplyGravityOnly(float dt)
         {
-            _verticalVelocity += Services.Config.gravity * dt;
+            _verticalVelocity = Mathf.Max(_verticalVelocity + Services.Config.gravity * dt, TerminalVelocity);
             Controller.Move(new Vector3(0f, _verticalVelocity * dt, 0f));
         }
 
@@ -256,7 +272,7 @@ namespace SanMonica.Players
             }
             else
             {
-                _verticalVelocity += Services.Config.gravity * dt;
+                _verticalVelocity = Mathf.Max(_verticalVelocity + Services.Config.gravity * dt, TerminalVelocity);
                 if (transform.position.y > _fallStartY) _fallStartY = transform.position.y;
                 if (_input.JumpPressed) TryVaultOrClimb();
             }

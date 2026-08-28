@@ -157,7 +157,11 @@ namespace SanMonica.Core
             yield return null;
 
             // ---- geometry ----
+            // The player is frozen until this finishes: they exist so the streamer
+            // and the population have somewhere to centre on, but the world has no
+            // colliders yet and gravity would drop them out of it.
             yield return StartCoroutine(Services.Streamer.PreloadAround(spawn, p => Report(0.58f + p * 0.28f, "Streaming the world")));
+            SnapPlayerToGround();
             yield return StartCoroutine(Services.Streamer.BuildDistantWorld(p => Report(0.86f + p * 0.10f, "Drawing the horizon")));
 
             // ---- finish ----
@@ -168,7 +172,7 @@ namespace SanMonica.Core
             Report(0.99f, "Ready");
             yield return null;
 
-            // Drop the player onto the ground now that colliders exist.
+            // Second pass: loading a save moves the player after the first snap.
             SnapPlayerToGround();
 
             WorldReady = true;
@@ -239,6 +243,7 @@ namespace SanMonica.Core
             Services.Player = player;
             player.Initialize(appearance);
 
+            player.Frozen = true;
             Services.Camera.SetTarget(go.transform);
             Services.Camera.SnapBehind(go.transform);
             LastSafePosition = spawn;
@@ -247,15 +252,28 @@ namespace SanMonica.Core
             if (fists != null) player.Weapons.GiveWeapon(fists, 0, true);
         }
 
+        /// <summary>
+        /// Puts the player on whatever surface is actually there - road, pavement
+        /// or bare terrain - and unfreezes them. The ray starts above the terrain
+        /// rather than above the player, so it still finds the ground if the
+        /// player has been moved somewhere unexpected by a save or a mission.
+        /// </summary>
         private void SnapPlayerToGround()
         {
             var player = Services.Player;
             if (player == null) return;
+
             Vector3 position = player.transform.position;
-            if (Physics.Raycast(position + Vector3.up * 40f, Vector3.down, out var hit, 120f, GameLayers.GroundMask, QueryTriggerInteraction.Ignore))
+            float terrain = Services.Map != null ? Services.Map.SampleHeight(position.x, position.z) : 0f;
+            float from = Mathf.Max(position.y, terrain) + 200f;
+
+            if (Physics.Raycast(new Vector3(position.x, from, position.z), Vector3.down, out var hit, 600f,
+                                GameLayers.GroundMask, QueryTriggerInteraction.Ignore))
                 player.Teleport(hit.point + Vector3.up * 0.4f, player.transform.eulerAngles.y);
             else
-                player.Teleport(new Vector3(position.x, Services.Map.SampleHeight(position.x, position.z) + 0.6f, position.z), player.transform.eulerAngles.y);
+                player.Teleport(new Vector3(position.x, terrain + 0.6f, position.z), player.transform.eulerAngles.y);
+
+            player.Frozen = false;
         }
 
         // ------------------------------------------------------------------
@@ -452,7 +470,38 @@ namespace SanMonica.Core
                 var player = Services.Player;
                 if (player != null && player.IsGrounded && !player.IsSwimming)
                     LastSafePosition = player.transform.position;
+
+                _outOfWorldTimer -= Time.unscaledDeltaTime;
+                if (_outOfWorldTimer <= 0f)
+                {
+                    _outOfWorldTimer = 0.25f;
+                    RecoverIfOutOfWorld(player);
+                }
             }
+        }
+
+        private float _outOfWorldTimer;
+
+        /// <summary>
+        /// Last line of defence against falling out of the world. A chunk that
+        /// has not streamed in yet, a bad exit from a vehicle or a mission that
+        /// moves the player somewhere unsupported all end the same way - dropping
+        /// forever through empty space with no way back. Rather than leave the
+        /// player stuck, put them back on the last ground they stood on.
+        /// </summary>
+        private void RecoverIfOutOfWorld(Players.PlayerController player)
+        {
+            if (player == null || player.InVehicle || !player.Health.IsAlive) return;
+
+            Vector3 position = player.transform.position;
+            float terrain = Services.Map != null ? Services.Map.SampleHeight(position.x, position.z) : 0f;
+            if (position.y > terrain - 30f && position.y > -150f) return;
+
+            Vector3 target = LastSafePosition;
+            if (Services.Map != null)
+                target.y = Mathf.Max(target.y, Services.Map.SampleHeight(target.x, target.z) + 0.6f);
+            player.Teleport(target, player.transform.eulerAngles.y);
+            Debug.LogWarning("[San Monica] Player fell out of the world at " + position + "; returned to " + target);
         }
     }
 }

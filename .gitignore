@@ -62,3 +62,7 @@ Thumbs.db
 
 # Local compile-check sandbox
 /.compilecheck/
+
+# Compile-check build output
+tools/compilecheck/bin/
+tools/compilecheck/obj/

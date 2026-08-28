@@ -23,6 +23,7 @@ namespace SanMonica.EditorTools
         private const string MarkerPath = "ProjectSettings/SanMonicaSetup.txt";
         private const string SettingsFolder = "Assets/Settings";
         private const string ScenePath = "Assets/Scenes/Boot.unity";
+        private const string ShaderResourceFolder = "Assets/Resources/Shaders";
 
         static ProjectAutoSetup()
         {
@@ -45,7 +46,7 @@ namespace SanMonica.EditorTools
                 AssignPipelines(pipelines);
                 ConfigureQualityLevels(pipelines);
                 ConfigureLayers();
-                ConfigureAlwaysIncludedShaders();
+                ConfigureShaderInclusion();
                 ConfigurePlayerSettings();
                 ConfigureInputAxes();
                 ConfigurePhysics();
@@ -67,6 +68,8 @@ namespace SanMonica.EditorTools
             if (!AssetDatabase.IsValidFolder("Assets/Settings")) AssetDatabase.CreateFolder("Assets", "Settings");
             if (!AssetDatabase.IsValidFolder("Assets/Scenes")) AssetDatabase.CreateFolder("Assets", "Scenes");
             if (!AssetDatabase.IsValidFolder("Assets/Data")) AssetDatabase.CreateFolder("Assets", "Data");
+            if (!AssetDatabase.IsValidFolder("Assets/Resources")) AssetDatabase.CreateFolder("Assets", "Resources");
+            if (!AssetDatabase.IsValidFolder(ShaderResourceFolder)) AssetDatabase.CreateFolder("Assets/Resources", "Shaders");
         }
 
         private struct Tier
@@ -243,19 +246,54 @@ namespace SanMonica.EditorTools
                 element.stringValue = name;
         }
 
-        private static void ConfigureAlwaysIncludedShaders()
+        /// <summary>
+        /// The world creates every material at runtime, so the shaders it asks
+        /// for have to survive build-time stripping. The obvious lever - the
+        /// Always Included Shaders list - is a trap: it bypasses URP's variant
+        /// stripping and the player build dies outright with "Universal Render
+        /// Pipeline/Lit has too many Shader variants (1179648)".
+        ///
+        /// Instead a handful of keeper materials live in Resources. They pull
+        /// the shaders into the build as ordinary asset references, so URP
+        /// strips variants the normal way, and each one carries the keywords the
+        /// game switches on at runtime so those variants are kept as well.
+        /// </summary>
+        private static void ConfigureShaderInclusion()
         {
-            // The world builds its materials at runtime through Shader.Find, so the
-            // shaders it needs must survive build-time stripping.
-            string[] shaderNames =
+            PruneAlwaysIncludedShaders();
+
+            string[] lit = { "Universal Render Pipeline/Lit", "Standard" };
+            string[] simpleLit = { "Universal Render Pipeline/Simple Lit", "Universal Render Pipeline/Lit" };
+            string[] unlit = { "Universal Render Pipeline/Unlit", "Unlit/Color" };
+            string[] particle = { "Universal Render Pipeline/Particles/Unlit", "Universal Render Pipeline/Unlit" };
+            string[] sky = { "Skybox/Procedural", "Skybox/Gradient" };
+
+            string[] surfaceKeywords = { "_NORMALMAP", "_EMISSION" };
+            string[] transparentKeywords = { "_SURFACE_TYPE_TRANSPARENT" };
+
+            EnsureKeeperMaterial("Lit", lit, surfaceKeywords, false);
+            EnsureKeeperMaterial("LitTransparent", lit, transparentKeywords, true);
+            EnsureKeeperMaterial("SimpleLit", simpleLit, surfaceKeywords, false);
+            EnsureKeeperMaterial("SimpleLitTransparent", simpleLit, transparentKeywords, true);
+            EnsureKeeperMaterial("Unlit", unlit, null, false);
+            EnsureKeeperMaterial("ParticleUnlit", particle, null, true);
+            EnsureKeeperMaterial("Sky", sky, null, false);
+        }
+
+        /// <summary>
+        /// Drops the heavyweight shaders from Always Included. Nothing adds them
+        /// any more, but a project set up by an earlier version of this script
+        /// still carries them, and one of them is enough to fail every build.
+        /// </summary>
+        private static void PruneAlwaysIncludedShaders()
+        {
+            var heavy = new HashSet<string>
             {
                 "Universal Render Pipeline/Lit",
                 "Universal Render Pipeline/Simple Lit",
                 "Universal Render Pipeline/Unlit",
                 "Universal Render Pipeline/Particles/Unlit",
                 "Skybox/Procedural",
-                "Sprites/Default",
-                "UI/Default"
             };
 
             var graphicsSettings = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset");
@@ -264,22 +302,50 @@ namespace SanMonica.EditorTools
             var array = serialized.FindProperty("m_AlwaysIncludedShaders");
             if (array == null) return;
 
-            var existing = new HashSet<Object>();
-            for (int i = 0; i < array.arraySize; i++)
+            bool changed = false;
+            for (int i = array.arraySize - 1; i >= 0; i--)
             {
-                var value = array.GetArrayElementAtIndex(i).objectReferenceValue;
-                if (value != null) existing.Add(value);
+                var shader = array.GetArrayElementAtIndex(i).objectReferenceValue as Shader;
+                if (shader == null || !heavy.Contains(shader.name)) continue;
+                array.DeleteArrayElementAtIndex(i);
+                changed = true;
+                Debug.Log("[San Monica] Removed " + shader.name + " from Always Included Shaders.");
             }
+            if (changed) serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
 
+        private static void EnsureKeeperMaterial(string assetName, string[] shaderNames,
+                                                 string[] keywords, bool transparent)
+        {
+            Shader shader = null;
             foreach (var name in shaderNames)
             {
-                var shader = Shader.Find(name);
-                if (shader == null || existing.Contains(shader)) continue;
-                array.InsertArrayElementAtIndex(array.arraySize);
-                array.GetArrayElementAtIndex(array.arraySize - 1).objectReferenceValue = shader;
-                existing.Add(shader);
+                shader = Shader.Find(name);
+                if (shader != null) break;
             }
-            serialized.ApplyModifiedPropertiesWithoutUndo();
+            if (shader == null)
+            {
+                Debug.LogWarning("[San Monica] No shader found for keeper material " + assetName);
+                return;
+            }
+
+            string path = ShaderResourceFolder + "/" + assetName + ".mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            bool created = material == null;
+            if (created) material = new Material(shader);
+            else if (material.shader != shader) material.shader = shader;
+
+            material.enableInstancing = true;
+            if (transparent)
+            {
+                material.SetFloat("_Surface", 1f);
+                material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
+            if (keywords != null)
+                foreach (var keyword in keywords) material.EnableKeyword(keyword);
+
+            if (created) AssetDatabase.CreateAsset(material, path);
+            else EditorUtility.SetDirty(material);
         }
 
         // ------------------------------------------------------------------

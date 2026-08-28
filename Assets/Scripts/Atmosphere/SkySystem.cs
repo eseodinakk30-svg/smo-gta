@@ -64,7 +64,11 @@ namespace SanMonica.Atmosphere
 
         private void BuildSkyMaterial()
         {
-            var shader = Shader.Find("Skybox/Procedural");
+            // Same keeper-material trick as MaterialLibrary: the shader is in
+            // the build because Assets/Resources/Shaders/Sky.mat references it.
+            var keeper = Resources.Load<Material>("Shaders/Sky");
+            var shader = keeper != null ? keeper.shader : null;
+            if (shader == null) shader = Shader.Find("Skybox/Procedural");
             if (shader == null) shader = Shader.Find("Skybox/Gradient");
             if (shader == null) return;
             _skyMaterial = new Material(shader) { name = "SanMonicaSky" };

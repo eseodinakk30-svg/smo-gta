@@ -187,6 +187,7 @@ namespace UnityEditor
         public SerializedProperty GetArrayElementAtIndex(int index) => this;
         public SerializedProperty FindPropertyRelative(string path) => this;
         public void InsertArrayElementAtIndex(int index) { }
+        public void DeleteArrayElementAtIndex(int index) { }
     }
 
     public class SerializedObject

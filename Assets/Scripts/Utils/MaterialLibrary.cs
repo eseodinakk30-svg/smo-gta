@@ -16,12 +16,25 @@ namespace SanMonica.Utils
         public static bool UseSimpleLit;      // toggled by the quality manager on low-end devices
         public static bool NormalMapsEnabled = true;
 
+        /// <summary>
+        /// Resolves a shader through its keeper material in Resources. Those
+        /// materials exist only so the shaders survive build-time stripping -
+        /// nothing renders with them - and asking through the material is more
+        /// reliable in a player than Shader.Find, which only ever finds what the
+        /// build already contains.
+        /// </summary>
+        private static Shader Keeper(string assetName)
+        {
+            var material = Resources.Load<Material>("Shaders/" + assetName);
+            return material != null ? material.shader : null;
+        }
+
         public static Shader LitShader
         {
             get
             {
                 if (_lit == null)
-                    _lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    _lit = Keeper("Lit") ?? Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
                 return _lit;
             }
         }
@@ -31,7 +44,7 @@ namespace SanMonica.Utils
             get
             {
                 if (_simpleLit == null)
-                    _simpleLit = Shader.Find("Universal Render Pipeline/Simple Lit") ?? LitShader;
+                    _simpleLit = Keeper("SimpleLit") ?? Shader.Find("Universal Render Pipeline/Simple Lit") ?? LitShader;
                 return _simpleLit;
             }
         }
@@ -41,7 +54,7 @@ namespace SanMonica.Utils
             get
             {
                 if (_unlit == null)
-                    _unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+                    _unlit = Keeper("Unlit") ?? Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
                 return _unlit;
             }
         }
@@ -51,7 +64,7 @@ namespace SanMonica.Utils
             get
             {
                 if (_particle == null)
-                    _particle = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? UnlitShader;
+                    _particle = Keeper("ParticleUnlit") ?? Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? UnlitShader;
                 return _particle;
             }
         }

@@ -145,6 +145,7 @@ Unity -batchmode -quit -nographics \
 | `No space left on device` | собери с `architectures: arm64` |
 | Кнопки `Run workflow` нет | workflow не в ветке по умолчанию, см. шаг 0 |
 | `ENOENT ... open 'ProjectSettings/ProjectSettings.asset'` | этот файл обязан лежать в репозитории: после установки модулей `unity-setup` читает из него настройки Android. Файл закоммичен, так что появиться такое может только если его удалили |
+| `has too many Shader variants (1179648)` | шейдер попал в `Always Included Shaders`, где не работает отсечение вариантов URP. Держать шейдеры в сборке надо материалами-якорями в `Assets/Resources/Shaders`, а не этим списком — `ProjectAutoSetup` так и делает и чистит список от старых записей |
 | `[Android SDK Build Tools] failed to install` | сам по себе не причина: на втором проходе Hub пишет `already installed`, и сборка идёт дальше. Настоящую ошибку ищи ниже по логу |
 
 Ищи ошибку по **всему** логу, а не по последним строкам: шаг очистки в конце

@@ -307,7 +307,7 @@ namespace SanMonica.EditorTools
             PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Android, ApiCompatibilityLevel.NET_Standard_2_1);
             PlayerSettings.Android.targetArchitectures = ResolveArchitectures();
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
-            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
+            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevel34;
             PlayerSettings.Android.androidIsGame = true;
             PlayerSettings.Android.forceInternetPermission = false;
             PlayerSettings.Android.forceSDCardPermission = false;
@@ -410,14 +410,20 @@ namespace SanMonica.EditorTools
         }
 
         // ------------------------------------------------------------------
+        // The boot scene is committed to the repository on purpose. It holds no
+        // objects at all - GameBootstrap builds the city from a RuntimeInitialize
+        // hook - so shipping it costs nothing and spares a batch-mode build from
+        // having to create and save a scene before it can build a player.
         private static void EnsureBootScene()
         {
             if (!File.Exists(ScenePath))
             {
+                Debug.LogWarning("[San Monica] " + ScenePath + " is missing; creating an empty one.");
                 var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 var marker = new GameObject("SanMonicaBoot");
                 marker.AddComponent<SanMonica.Core.BootMarker>();
                 EditorSceneManager.SaveScene(scene, ScenePath);
+                AssetDatabase.ImportAsset(ScenePath);
             }
 
             var buildScenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);

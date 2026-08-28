@@ -128,7 +128,8 @@ namespace SanMonica.Missions
             if (mugger != null)
             {
                 e.Peds.Add(mugger);
-                mugger.EnterState(PedState.Combat);
+                if (victim != null) mugger.SetThreat(victim.transform);
+                else mugger.EnterState(PedState.Wander);
             }
             GameEvents.Notify("Something is happening nearby", 2f);
         }
@@ -146,8 +147,9 @@ namespace SanMonica.Missions
             {
                 var a = peds.Spawn(db.Ped(aId), origin + new Vector3(_rng.Range(-4f, -1f), 0f, _rng.Range(-3f, 3f)), Quaternion.identity);
                 var b = peds.Spawn(db.Ped(bId), origin + new Vector3(_rng.Range(1f, 4f), 0f, _rng.Range(-3f, 3f)), Quaternion.identity);
-                if (a != null) { e.Peds.Add(a); a.EnterState(PedState.Combat); }
-                if (b != null) { e.Peds.Add(b); b.EnterState(PedState.Combat); }
+                if (a != null) e.Peds.Add(a);
+                if (b != null) e.Peds.Add(b);
+                if (a != null && b != null) { a.SetThreat(b.transform); b.SetThreat(a.transform); }
             }
             e.Lifetime = 90f;
         }

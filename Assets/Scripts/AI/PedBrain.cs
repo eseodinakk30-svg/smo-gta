@@ -227,6 +227,16 @@ namespace SanMonica.AI
                 EnterState(PedState.Wander);
         }
 
+        /// <summary>Points this NPC at a specific target and starts a fight.</summary>
+        public void SetThreat(Transform target, bool engage = true)
+        {
+            _threat = target;
+            if (target != null) Perception.Alertness = 1f;
+            if (engage && target != null && State != PedState.Combat) EnterState(PedState.Combat);
+        }
+
+        public Transform CurrentThreat => _threat;
+
         public void EnterState(PedState next)
         {
             State = next;

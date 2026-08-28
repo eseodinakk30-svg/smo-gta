@@ -494,7 +494,8 @@ namespace SanMonica.Missions
                 if (brain == null) continue;
                 MarkFactionHostile(objective.EnemyFaction);
                 brain.Faction = objective.EnemyFaction;
-                brain.EnterState(PedState.Combat);
+                if (Services.Player != null) brain.SetThreat(Services.Player.transform);
+                else brain.EnterState(PedState.Combat);
                 _spawnedPeds.Add(brain);
                 if (objective.Type == ObjectiveType.KillTarget && _killTarget == null)
                 {

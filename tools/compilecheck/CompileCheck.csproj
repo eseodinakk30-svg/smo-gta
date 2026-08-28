@@ -9,9 +9,14 @@
     <NoWarn>CS0414;CS0169;CS0649;CS0162;CS0219;CS0067;CS0108;CS0114;CS0660;CS0661;CS0472;CS8509;CS1717</NoWarn>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <ImplicitUsings>disable</ImplicitUsings>
+    <DefineConstants>$(DefineConstants);UNITY_EDITOR;UNITY_ANDROID</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="shim/**/*.cs" />
-    <Compile Include="../../Assets/Scripts/**/*.cs" Exclude="../../Assets/Scripts/Editor/**/*.cs" />
+    <!-- Editor scripts are compiled too: they configure URP, the quality tiers and
+         every Android player setting, so a typo there breaks the build just as
+         hard, and Unity only reports it eleven minutes into a CI run. They are
+         guarded by #if UNITY_EDITOR, which the DefineConstants below sets. -->
+    <Compile Include="../../Assets/Scripts/**/*.cs" />
   </ItemGroup>
 </Project>

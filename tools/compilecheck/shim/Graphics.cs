@@ -36,10 +36,13 @@ namespace UnityEngine.Rendering.Universal
         public int msaaSampleCount { get; set; }
         public bool supportsHDR { get; set; }
         public bool useSRPBatcher { get; set; }
+
+        public static UniversalRenderPipelineAsset Create(ScriptableRendererData rendererData = null)
+            => new UniversalRenderPipelineAsset();
     }
 
-    public class UniversalRendererData : UnityEngine.ScriptableObject { }
     public class ScriptableRendererData : UnityEngine.ScriptableObject { }
+    public class UniversalRendererData : ScriptableRendererData { }
     public static class UniversalRenderPipeline
     {
         public static UniversalRenderPipelineAsset asset { get; set; }

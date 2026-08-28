@@ -128,8 +128,14 @@ namespace SanMonica.Optimization
                 _pipelineAsset.msaaSampleCount = Mathf.Max(1, msaa);
                 _pipelineAsset.supportsHDR = hdr;
             }
-            QualitySettings.shadows = shadows ? (softShadows ? ShadowQuality.All : ShadowQuality.HardOnly) : ShadowQuality.Disable;
-            QualitySettings.shadowResolution = softShadows ? ShadowResolution.Medium : ShadowResolution.Low;
+            // Fully qualified on purpose: URP declares its own ShadowQuality and
+            // ShadowResolution, so the bare names are ambiguous in this file.
+            QualitySettings.shadows = shadows
+                ? (softShadows ? UnityEngine.ShadowQuality.All : UnityEngine.ShadowQuality.HardOnly)
+                : UnityEngine.ShadowQuality.Disable;
+            QualitySettings.shadowResolution = softShadows
+                ? UnityEngine.ShadowResolution.Medium
+                : UnityEngine.ShadowResolution.Low;
             QualitySettings.skinWeights = SkinWeights.OneBone;
             QualitySettings.softParticles = false;
             QualitySettings.billboardsFaceCameraPosition = true;

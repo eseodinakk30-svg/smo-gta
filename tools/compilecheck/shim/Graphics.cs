@@ -20,6 +20,14 @@ namespace UnityEngine.Rendering
 
 namespace UnityEngine.Rendering.Universal
 {
+    // URP really does declare these names, and they collide with the ones in
+    // UnityEngine. A file that pulls in both namespaces has to qualify them, so
+    // the stubs carry the clash too - without it this check would pass on code
+    // that Unity rejects with CS0104.
+    public enum ShadowQuality { Disable, HardOnly, All }
+    public enum ShadowResolution { _256, _512, _1024, _2048, _4096 }
+    public enum ShadowCascadesOption { NoCascades, TwoCascades, FourCascades }
+
     public class UniversalRenderPipelineAsset : RenderPipelineAsset
     {
         public float renderScale { get; set; }

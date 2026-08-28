@@ -1,0 +1,28 @@
+# Unity Hub 3.20+ ставится в /usr/lib/unityhub, а unity-cli внутри экшенов
+# Buildalon зашит на старый путь /opt/unityhub/unityhub. Апстрим это уже
+# исправил, но в опубликованный бандл экшена правка не попала.
+#
+# Шаг намеренно не лезет в сеть и ничего не ставит: apt на раннере то и дело
+# упирается в чужой lock и висит десятками минут. Установку Hub делает сам
+# buildalon/unity-setup — его скрипт заодно создаёт обёртку /usr/bin/unity-hub,
+# которую он потом вызывает как команду. Нам остаётся подложить два указателя:
+#   * UNITY_HUB_PATH — путь, который unity-cli читает в первую очередь;
+#   * /opt/unityhub/unityhub — симлинк для кода и обёртки, знающих старый путь.
+# Симлинк создаётся заранее и до установки висит битым: это нормально, к
+# моменту проверки apt уже положит бинарник на место.
+name: "Unity Hub"
+description: "Подкладывает пути к Unity Hub для экшенов Buildalon"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        HUB=/usr/lib/unityhub/unityhub
+        sudo mkdir -p /opt/unityhub
+        if [ ! -e /opt/unityhub/unityhub ]; then
+          sudo ln -sfn "$HUB" /opt/unityhub/unityhub
+          echo "Совместимость: /opt/unityhub/unityhub -> $HUB"
+        fi
+        echo "UNITY_HUB_PATH=$HUB" >> "$GITHUB_ENV"
+        echo "Готово, установку Hub выполнит следующий шаг."

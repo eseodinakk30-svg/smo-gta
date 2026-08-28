@@ -1,0 +1,66 @@
+# Шаг 1: быстрая проверка — Unity скачивается, лицензия активируется,
+# весь C# компилируется настоящим Unity. APK не собирается, поэтому идёт
+# заметно быстрее полной сборки.
+# Actions -> "1. Быстрая проверка проекта" -> Run workflow.
+#
+# Нужны ровно два секрета репозитория:
+#   UNITY_EMAIL    — почта аккаунта Unity
+#   UNITY_PASSWORD — пароль аккаунта Unity
+# Файл лицензии (.alf/.ulf) НЕ нужен: активация идёт напрямую через Unity Hub,
+# он умеет активировать Personal по логину и паролю.
+name: "1. Быстрая проверка проекта"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Компиляция всех скриптов в Unity
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить секреты до долгой работы
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          fail=0
+          [ -z "$UNITY_EMAIL" ]    && { echo "::error ::Нет секрета UNITY_EMAIL (почта аккаунта Unity)"; fail=1; }
+          [ -z "$UNITY_PASSWORD" ] && { echo "::error ::Нет секрета UNITY_PASSWORD (пароль аккаунта Unity)"; fail=1; }
+          [ "$fail" = "1" ] && { echo "Инструкция: docs/BUILD.md"; exit 1; }
+          echo "Секреты на месте."
+
+      - name: Поставить Unity Hub и починить путь к нему
+        uses: ./.github/actions/unity-hub
+
+      - name: Установить Unity
+        uses: buildalon/unity-setup@v2
+        with:
+          version-file: ProjectSettings/ProjectVersion.txt
+          build-targets: StandaloneLinux64
+          cache-installation: true
+
+      - name: Активировать лицензию Unity
+        uses: buildalon/activate-unity-license@v2
+        with:
+          license: Personal
+          username: ${{ secrets.UNITY_EMAIL }}
+          password: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Скомпилировать проект
+        uses: buildalon/unity-action@v2
+        with:
+          project-path: ${{ github.workspace }}
+          build-target: StandaloneLinux64
+          log-name: compile
+          args: -quit -batchmode -nographics -executeMethod SanMonica.EditorTools.BuildScript.CompileOnly
+
+      - name: Сохранить лог Unity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-logs-check
+          path: "**/*.log"
+          if-no-files-found: ignore

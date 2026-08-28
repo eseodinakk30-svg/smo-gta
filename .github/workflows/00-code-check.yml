@@ -1,0 +1,24 @@
+# Шаг 0: проверка кода без Unity и без лицензии — 30 секунд.
+# Компилирует все игровые скрипты обычным C#-компилятором против stub-сборки
+# Unity API. Ловит опечатки, несовпадение сигнатур и битые ссылки между
+# системами до того, как за них будет заплачено пятнадцатью минутами Unity.
+name: "0. Проверка кода (без Unity)"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  compile:
+    name: Типизация всех скриптов
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Скомпилировать против stub-сборки Unity
+        run: dotnet build tools/compilecheck/CompileCheck.csproj -v q --nologo

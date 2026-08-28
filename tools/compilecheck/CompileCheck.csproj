@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>SanMonicaCompileCheck</AssemblyName>
+    <OutputType>Library</OutputType>
+    <NoWarn>CS0414;CS0169;CS0649;CS0162;CS0219;CS0067;CS0108;CS0114;CS0660;CS0661;CS0472;CS8509;CS1717</NoWarn>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="shim/**/*.cs" />
+    <Compile Include="../../Assets/Scripts/**/*.cs" Exclude="../../Assets/Scripts/Editor/**/*.cs" />
+  </ItemGroup>
+</Project>

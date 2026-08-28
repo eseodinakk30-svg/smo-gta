@@ -66,3 +66,7 @@ Thumbs.db
 # Compile-check build output
 tools/compilecheck/bin/
 tools/compilecheck/obj/
+
+# ...but the compile-check project itself must be tracked: the "*.csproj" rule
+# above is meant for the C# projects Unity regenerates, not for this one.
+!tools/compilecheck/CompileCheck.csproj

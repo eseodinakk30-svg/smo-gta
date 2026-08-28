@@ -1,0 +1,134 @@
+# Шаг 2: сборка Android APK и публикация в Releases.
+# Actions -> "2. Сборка APK" -> Run workflow.
+#
+# Нужны те же два секрета, что и для быстрой проверки:
+#   UNITY_EMAIL, UNITY_PASSWORD
+# Файл лицензии не нужен — Unity Hub активирует Personal по логину.
+name: "2. Сборка APK"
+
+on:
+  workflow_dispatch:
+    inputs:
+      architectures:
+        description: "Архитектуры: arm64 (быстрее вдвое) или both (ARMv7+ARM64)"
+        type: choice
+        options: [arm64, both]
+        default: arm64
+      format:
+        description: "Формат: apk (установить на телефон) или aab (Google Play)"
+        type: choice
+        options: [apk, aab]
+        default: apk
+      release:
+        description: "Опубликовать файл в Releases"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Android (IL2CPP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить секреты до долгой работы
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          fail=0
+          [ -z "$UNITY_EMAIL" ]    && { echo "::error ::Нет секрета UNITY_EMAIL (почта аккаунта Unity)"; fail=1; }
+          [ -z "$UNITY_PASSWORD" ] && { echo "::error ::Нет секрета UNITY_PASSWORD (пароль аккаунта Unity)"; fail=1; }
+          [ "$fail" = "1" ] && { echo "Инструкция: раздел «Как получить APK» в README.md"; exit 1; }
+          echo "Секреты на месте."
+
+      # Android SDK раннера НЕ трогаем: если докачка компонентов у Unity Hub
+      # сорвётся, он послужит запасным путём. Места и без него хватает.
+      - name: Освободить место на раннере
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost /usr/share/swift || true
+          df -h /
+
+      # Сборка только под ARM64 идёт примерно вдвое быстрее: IL2CPP
+      # компилирует нативный код отдельно для каждой архитектуры.
+      # Архитектура и формат читаются билд-скриптом из окружения — исходники
+      # при этом не правятся.
+      - name: Выбрать архитектуры и формат
+        run: |
+          ARCH="${{ github.event.inputs.architectures }}"
+          FORMAT="${{ github.event.inputs.format }}"
+          echo "SMO_ANDROID_ARCH=${ARCH:-arm64}" >> "$GITHUB_ENV"
+          echo "SMO_BUILD_FORMAT=${FORMAT:-apk}" >> "$GITHUB_ENV"
+          echo "Архитектуры: ${ARCH:-arm64}, формат: ${FORMAT:-apk}"
+
+      - name: Поставить Unity Hub и починить путь к нему
+        uses: ./.github/actions/unity-hub
+
+      - name: Установить Unity с модулем Android
+        uses: buildalon/unity-setup@v2
+        with:
+          version-file: ProjectSettings/ProjectVersion.txt
+          build-targets: Android
+          cache-installation: true
+
+      - name: Активировать лицензию Unity
+        uses: buildalon/activate-unity-license@v2
+        with:
+          license: Personal
+          username: ${{ secrets.UNITY_EMAIL }}
+          password: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Собрать
+        uses: buildalon/unity-action@v2
+        with:
+          project-path: ${{ github.workspace }}
+          build-target: Android
+          log-name: build-android
+          args: -quit -batchmode -nographics -executeMethod SanMonica.EditorTools.BuildScript.BuildFromEnvironment
+
+      - name: Найти собранный файл
+        id: package
+        run: |
+          ext="${{ github.event.inputs.format }}"
+          ext="${ext:-apk}"
+          path=$(find Builds -name "*.${ext}" -print -quit)
+          [ -z "$path" ] && { echo "::error ::Файл .${ext} не найден в Builds"; ls -R Builds || true; exit 1; }
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "ext=$ext" >> "$GITHUB_OUTPUT"
+          ls -lh "$path"
+
+      - name: Выложить как артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: SanMonica-${{ steps.package.outputs.ext }}
+          path: ${{ steps.package.outputs.path }}
+
+      - name: Опубликовать в Releases
+        if: ${{ github.event.inputs.release != 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ steps.package.outputs.path }}
+          EXT: ${{ steps.package.outputs.ext }}
+        run: |
+          TAG="${EXT}-$(date -u +%Y%m%d-%H%M)"
+          UNITY=$(head -1 ProjectSettings/ProjectVersion.txt | cut -d' ' -f2)
+          gh release create "$TAG" "$PACKAGE" \
+            --title "San Monica — ${EXT^^}" \
+            --notes "Собрано Unity ${UNITY}, архитектуры: ${SMO_ANDROID_ARCH}.
+
+          Скачай файл ниже и установи на телефон (нужно разрешить установку из неизвестных источников)."
+
+      - name: Сохранить лог Unity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-logs-android
+          path: "**/*.log"
+          if-no-files-found: ignore

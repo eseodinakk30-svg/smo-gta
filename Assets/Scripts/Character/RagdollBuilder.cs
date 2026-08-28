@@ -152,8 +152,8 @@ namespace SanMonica.Characters
 
                 var rb = t.gameObject.AddComponent<Rigidbody>();
                 rb.mass = s.Mass;
-                rb.linearDamping = 0.15f;
-                rb.angularDamping = 0.9f;
+                rb.drag = 0.15f;
+                rb.angularDrag = 0.9f;
                 rb.interpolation = RigidbodyInterpolation.None;
                 rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
                 rb.isKinematic = true;

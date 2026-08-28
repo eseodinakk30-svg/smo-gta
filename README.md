@@ -1,6 +1,6 @@
 # San Monica: Saltwater Debt
 
-Полноценная 3D игра с открытым миром для Android на **Unity 6 LTS + URP + C#**.
+Полноценная 3D игра с открытым миром для Android на **Unity 2022.3 LTS + URP + C#**.
 Город San Monica — **16 × 16 км (268 км²)**: центр с небоскрёбами, жилые кварталы,
 богатые холмы, промзона, порт, аэропорт, пригороды, фермы, лес, горы, пустыня,
 пляж и океан. Мир, транспорт, персонажи, звук и музыка **генерируются процедурно
@@ -12,87 +12,153 @@
 
 ---
 
-## 1. Что нужно для сборки APK
+## 1. Как получить APK — с телефона, без компьютера
 
-| Требование | Значение |
-|---|---|
-| Unity | **6000.0.32f1** (Unity 6 LTS). Любая другая 6000.0.x тоже подойдёт |
-| Модули Unity Hub | **Android Build Support** + **Android SDK & NDK Tools** + **OpenJDK** |
-| Render Pipeline | Universal RP 17 (ставится автоматически из `Packages/manifest.json`) |
-| Диск | ~15 ГБ на Unity + Android SDK/NDK, ~4 ГБ на `Library/` проекта |
-| Минимальная версия Android | 7.0 (API 24), ARMv7 + ARM64 |
+Сборку делает GitHub Actions, готовый файл кладётся в **Releases**. Всё, что
+ниже, делается из браузера на телефоне.
+
+### Шаг 0. Один раз: два секрета
+
+Сборке нужен аккаунт Unity (бесплатный, регистрация на https://id.unity.com).
+В репозитории открой:
+
+`Settings → Secrets and variables → Actions → New repository secret`
+
+и добавь два секрета:
+
+| Имя | Значение |
+| --- | --- |
+| `UNITY_EMAIL` | почта аккаунта Unity |
+| `UNITY_PASSWORD` | пароль этого аккаунта |
+
+Три вещи, на которых спотыкаются чаще всего:
+
+* Пароль нужен именно от **Unity ID**. Если входишь в Unity через Google, Apple
+  или Facebook, отдельного пароля у аккаунта нет — задай его на
+  https://id.unity.com в разделе Security.
+* **Двухфакторная аутентификация** ломает активацию в CI. Её нужно временно
+  отключить в настройках Unity ID.
+* При копировании легко прихватить пробел или перевод строки. В секрете лишних
+  символов быть не должно.
+
+Файл лицензии (`.alf` / `.ulf`) не нужен: активация идёт напрямую по логину и
+паролю.
+
+### Шаг 1. Проверка кода — 30 секунд, без Unity и без секретов
+
+`Actions → «0. Проверка кода (без Unity)» → Run workflow`
+
+Компилирует все игровые скрипты обычным C#-компилятором против stub-сборки
+Unity API. Ловит ошибки кода за полминуты, не тратя пятнадцать минут на Unity.
+Запускается сам на каждый push.
+
+### Шаг 2. Быстрая проверка проекта — ~15 минут
+
+`Actions → «1. Быстрая проверка проекта» → Run workflow`
+
+Скачивает Unity, активирует лицензию и компилирует проект настоящим Unity.
+APK не собирает. Если сломана лицензия или настройка проекта — узнаешь через
+пятнадцать минут, а не через полтора часа.
+
+Зелёная галочка — можно собирать.
+
+### Шаг 3. Сборка APK
+
+`Actions → «2. Сборка APK» → Run workflow`
+
+Три параметра:
+
+* **architectures** — `arm64` (только 64-битные телефоны, собирается вдвое
+  быстрее) или `both` (ARMv7 + ARM64, встанет на что угодно). Любой телефон
+  после 2016 года — ARM64.
+* **format** — `apk` для установки на телефон или `aab` для Google Play.
+* **release** — публиковать ли файл в Releases. Оставь включённым.
+
+### Шаг 4. Установка
+
+Готовый файл появится в двух местах:
+
+* **Releases** — отдельным файлом, скачивается одним тапом с телефона;
+* внизу страницы запуска, в разделе `Artifacts` — там zip.
+
+Скачай `.apk`, открой, разреши установку из неизвестного источника. APK подписан
+отладочным ключом Unity — для своего телефона этого достаточно. Для Google Play
+собери `aab` и подпиши собственным keystore (см. ниже).
+
+### Если сборка упала
+
+Открой упавший запуск в `Actions` и разверни красный шаг — там текст ошибки.
+Внизу страницы запуска лежат артефакты `unity-logs-*` с полным логом Unity.
+
+| Сообщение | Что делать |
+| --- | --- |
+| `Нет секрета UNITY_EMAIL` | не добавлен секрет, см. шаг 0 |
+| `Invalid Credential`, `code 143.002` | Unity ID отверг логин или пароль: опечатка, лишний пробел, вход через Google/Apple без своего пароля, включена двухфакторка |
+| `error CS____` | ошибка компиляции C#, номер строки — в тексте ошибки |
+| `No space left on device` | собери с `architectures: arm64` |
+
+Ищи ошибку по **всему** логу, а не по последним строкам: шаг очистки в конце
+часто печатает свои собственные жалобы, которые к настоящей причине отношения
+не имеют.
 
 ---
 
-## 2. Сборка APK — пошагово (самый простой путь)
+## 2. Сборка на компьютере
 
-1. **Установите Unity Hub** → вкладка *Installs* → *Install Editor* → версия
-   **6000.0.32f1** → в списке модулей отметьте **Android Build Support**, а внутри
-   него — **Android SDK & NDK Tools** и **OpenJDK**.
-2. **Склонируйте репозиторий**:
-   ```bash
-   git clone https://github.com/eseodinakk30-svg/smo-gta.git
-   cd smo-gta
-   ```
-3. **Откройте проект**: Unity Hub → *Add* → выберите папку `smo-gta` → откройте.
-   При первом открытии Unity импортирует пакеты (5–15 минут) и автоматически
-   выполнит настройку проекта: создаст четыре URP-ассета качества, настроит
-   Android Player Settings, оси геймпада и сцену `Assets/Scenes/Boot.unity`.
-   *Если что-то не применилось — меню **San Monica → Setup Project**.*
-4. **Проверьте, что игра запускается**: откройте `Assets/Scenes/Boot.unity`
-   и нажмите **Play**. Игра собирает мир сама — экран загрузки, затем город.
-5. **Соберите APK**: меню **San Monica → Build → Android APK**.
-   Готовый файл появится в `Builds/SanMonica.apk`.
-6. **Установите на телефон**:
-   ```bash
-   adb install -r Builds/SanMonica.apk
-   ```
-   Или просто скопируйте `.apk` на устройство и откройте его.
+Если Unity всё же есть:
 
-### AAB для Google Play
+| Требование | Значение |
+|---|---|
+| Unity | **2022.3.62f1** (LTS) |
+| Модули Unity Hub | **Android Build Support** + **Android SDK & NDK Tools** + **OpenJDK** |
+| Render Pipeline | Universal RP 14 (ставится автоматически из `Packages/manifest.json`) |
+| Минимальная версия Android | 7.0 (API 24), ARMv7 + ARM64 |
 
-Меню **San Monica → Build → Android App Bundle (AAB)** → `Builds/SanMonica.aab`.
+1. Unity Hub → *Installs* → Unity **2022.3.62f1** с модулем **Android Build Support**.
+2. Unity Hub → *Add* → выбери корень репозитория. Первый импорт подтянет URP 14
+   и запустит автонастройку (`Assets/Scripts/Editor/ProjectAutoSetup.cs`): создаст
+   четыре пресета качества, назначит пайплайн, настроит Android, слои и оси
+   геймпада, пропишет сцену. Если не отработала — меню **San Monica → Setup Project**.
+3. Меню **San Monica → Build → Android APK** → `Builds/SanMonica.apk`.
+   Для Google Play — **Android App Bundle (AAB)** → `Builds/SanMonica.aab`.
 
-### Сборка из командной строки
+Поиграть без сборки: открой `Assets/Scenes/Boot.unity` и нажми **Play**.
+
+> Сцена намеренно пустая: весь мир — город, машины, персонажи, интерфейс, звук —
+> строится из кода в `Assets/Scripts/Core/GameBootstrap.cs`. Поэтому в репозитории
+> нет ни одного бинарного ассета: проект открывается в любой установке Unity
+> и не ломается на чужой машине.
+
+Из командной строки:
 
 ```bash
 # APK
-"/path/to/Unity/Editor/Unity" -batchmode -quit -nographics \
-  -projectPath "$(pwd)" \
-  -executeMethod SanMonica.EditorTools.BuildScript.BuildApk \
-  -outputPath "$(pwd)/Builds/SanMonica.apk" \
-  -logFile build.log
+Unity -batchmode -quit -nographics \
+      -projectPath . \
+      -executeMethod SanMonica.EditorTools.BuildScript.BuildApk \
+      -logFile -
 
 # AAB
-"/path/to/Unity/Editor/Unity" -batchmode -quit -nographics \
-  -projectPath "$(pwd)" \
-  -executeMethod SanMonica.EditorTools.BuildScript.BuildAab \
-  -outputPath "$(pwd)/Builds/SanMonica.aab" \
-  -logFile build.log
+Unity -batchmode -quit -nographics \
+      -projectPath . \
+      -executeMethod SanMonica.EditorTools.BuildScript.BuildAab \
+      -logFile -
 ```
 
-Дополнительные аргументы: `-development`, `-versionCode 5`,
+Дополнительные аргументы: `-outputPath <файл>`, `-development`, `-versionCode 5`,
 `-keystore /path/key.keystore -keystorePass … -keyalias … -keyaliasPass …`.
+Архитектуру можно задать переменной окружения `SMO_ANDROID_ARCH=arm64`.
 
 ### Подпись релизной сборки
 
 1. `Edit → Project Settings → Player → Publishing Settings → Keystore Manager`
-   → создайте keystore и alias.
-2. Либо передайте keystore аргументами командной строки (см. выше).
+   → создай keystore и alias.
+2. Либо передай keystore аргументами командной строки (см. выше).
 3. Для Google Play обязателен **AAB**, для установки напрямую — **APK**.
-
-### Сборка в GitHub Actions
-
-`.github/workflows/android-build.yml` собирает APK/AAB через
-[GameCI](https://game.ci). Добавьте секреты репозитория:
-`UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` и, для подписи,
-`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_NAME`, `ANDROID_KEYSTORE_PASS`,
-`ANDROID_KEYALIAS_NAME`, `ANDROID_KEYALIAS_PASS`.
-Запуск: вкладка *Actions* → *Android Build* → *Run workflow*.
 
 ---
 
-## 3. Быстрая проверка кода без Unity
+## 3. Быстрая проверка кода без Unity (локально)
 
 Весь рантайм-код типизированно проверяется за секунды против stub-сборки Unity API:
 
@@ -100,7 +166,7 @@
 dotnet build tools/compilecheck/CompileCheck.csproj
 ```
 
-Это же делает workflow `.github/workflows/compile-check.yml` на каждый push.
+Это же делает workflow «0. Проверка кода (без Unity)» на каждый push.
 
 ---
 
@@ -302,6 +368,7 @@ box-коллайдеры вместо mesh-коллайдеров для зда�
 | Всё розовое / нет материалов | Меню **San Monica → Setup Project**, затем перезапуск редактора |
 | «No scenes in build settings» | То же меню — оно создаёт `Boot.unity` и добавляет её в билд |
 | Android SDK не найден | Unity Hub → *Installs* → шестерёнка → *Add modules* → Android SDK & NDK Tools |
+| Сборка в Actions падает на лицензии | см. таблицу в разделе 1, «Если сборка упала» |
 | Долгая первая загрузка в игре | Нормально: генерируются планировка города и дальний ландшафт |
 | Низкий FPS | Настройки → включите **Auto Quality** или выберите Low/Medium |
 | Игра не стартует в пустой сцене | Она стартует из любой сцены; проверьте, что скрипты скомпилировались |
@@ -312,6 +379,10 @@ box-коллайдеры вместо mesh-коллайдеров для зда�
 
 Готовая база позволяет наращивать контент без изменения архитектуры:
 новые машины и оружие — это одна запись в каталоге; новые миссии — запись
-в `StoryCatalog`; новые районы — якорь в `WorldMap`. Для очень больших наборов
-внешних ассетов в проект уже заложены точки подключения Addressables
-(пакет установлен) и Play Asset Delivery.
+в `StoryCatalog`; новые районы — якорь в `WorldMap`.
+
+Для очень больших наборов внешних ассетов `ChunkStreamer` уже работает через
+абстракцию «построить содержимое чанка», поэтому Addressables и Play Asset
+Delivery подключаются поверх него без переделки: достаточно добавить пакет
+`com.unity.addressables` в `Packages/manifest.json` и реализовать загрузку
+в месте, где сейчас вызывается процедурная генерация.

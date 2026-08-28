@@ -407,7 +407,7 @@ namespace SanMonica.Weapons
             col.radius = 0.12f;
             var body = go.AddComponent<Rigidbody>();
             body.mass = 0.6f;
-            body.linearVelocity = aimRay.direction * def.throwForce + Vector3.up * 2.2f;
+            body.velocity = aimRay.direction * def.throwForce + Vector3.up * 2.2f;
             body.angularVelocity = Random.insideUnitSphere * 6f;
 
             var projectile = go.AddComponent<Explosive>();

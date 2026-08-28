@@ -83,14 +83,11 @@ namespace UnityEngine
     public class Rigidbody : Component
     {
         public float mass { get; set; }
-        public float linearDamping { get; set; }
-        public float angularDamping { get; set; }
         public float drag { get; set; }
         public float angularDrag { get; set; }
         public bool isKinematic { get; set; }
         public bool useGravity { get; set; }
         public bool detectCollisions { get; set; }
-        public Vector3 linearVelocity { get; set; }
         public Vector3 velocity { get; set; }
         public Vector3 angularVelocity { get; set; }
         public Vector3 centerOfMass { get; set; }

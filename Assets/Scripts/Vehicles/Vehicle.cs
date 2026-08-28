@@ -32,7 +32,7 @@ namespace SanMonica.Vehicles
         public bool IsAlive => !IsDestroyed;
         public Transform Transform => transform;
         public string DisplayName => Definition != null ? Definition.displayName : "Vehicle";
-        public float SpeedMs => Body != null ? Vector3.Dot(Body.linearVelocity, transform.forward) : 0f;
+        public float SpeedMs => Body != null ? Vector3.Dot(Body.velocity, transform.forward) : 0f;
         public float SpeedKph => SpeedMs * 3.6f;
         public float AbsSpeedKph => Mathf.Abs(SpeedKph);
         public bool AllowsDriveBy => Definition == null || !Definition.IsAircraft;
@@ -90,8 +90,8 @@ namespace SanMonica.Vehicles
             Body = gameObject.GetComponent<Rigidbody>();
             if (Body == null) Body = gameObject.AddComponent<Rigidbody>();
             Body.mass = definition.mass;
-            Body.linearDamping = definition.IsWatercraft ? definition.waterDrag * 0.25f : 0.06f;
-            Body.angularDamping = definition.IsAircraft ? 1.4f : 1.1f;
+            Body.drag = definition.IsWatercraft ? definition.waterDrag * 0.25f : 0.06f;
+            Body.angularDrag = definition.IsAircraft ? 1.4f : 1.1f;
             Body.interpolation = RigidbodyInterpolation.Interpolate;
             Body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             Body.centerOfMass = new Vector3(0f, definition.centerOfMassHeight, 0f);
@@ -436,7 +436,7 @@ namespace SanMonica.Vehicles
             if (ped != null && impact > 6f)
             {
                 ped.ApplyDamage(SanMonica.Characters.DamageInfo.Simple(impact * 12f, SanMonica.Characters.DamageKind.Vehicle,
-                    Driver, collision.GetContact(0).point, Body.linearVelocity.normalized, impact * 45f));
+                    Driver, collision.GetContact(0).point, Body.velocity.normalized, impact * 45f));
                 if (DriverIsPlayer)
                     GameEvents.RaiseCrime(new CrimeEvent
                     {
@@ -459,7 +459,7 @@ namespace SanMonica.Vehicles
             _occupants.Clear();
             if (Body != null)
             {
-                Body.linearVelocity = Vector3.zero;
+                Body.velocity = Vector3.zero;
                 Body.angularVelocity = Vector3.zero;
             }
             if (_renderer != null && _visual.Materials != null) _renderer.sharedMaterials = _visual.Materials;

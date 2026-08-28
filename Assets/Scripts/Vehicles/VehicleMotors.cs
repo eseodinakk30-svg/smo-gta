@@ -210,7 +210,7 @@ namespace SanMonica.Vehicles
 
             // Speed limiter.
             if (absSpeed > topSpeed)
-                Body.linearVelocity = Vector3.ClampMagnitude(Body.linearVelocity, topSpeed);
+                Body.velocity = Vector3.ClampMagnitude(Body.velocity, topSpeed);
 
             _engineRpm = Mathf.Lerp(_engineRpm, Mathf.Clamp01(absSpeed / Mathf.Max(1f, topSpeed)) * 0.75f + throttle * 0.35f, Time.fixedDeltaTime * 4f);
             EngineRpmNormalised = Mathf.Clamp01(_engineRpm);
@@ -321,7 +321,7 @@ namespace SanMonica.Vehicles
                 if (_visuals.Length > 1 && _visuals[1] != null) { _rear.GetWorldPose(out var p1, out var r1); _visuals[1].SetPositionAndRotation(p1, r1); }
             }
 
-            if (absSpeed > topSpeed) Body.linearVelocity = Vector3.ClampMagnitude(Body.linearVelocity, topSpeed);
+            if (absSpeed > topSpeed) Body.velocity = Vector3.ClampMagnitude(Body.velocity, topSpeed);
             EngineRpmNormalised = Mathf.Clamp01(absSpeed / Mathf.Max(1f, topSpeed) * 0.8f + throttle * 0.3f);
         }
     }
@@ -387,7 +387,7 @@ namespace SanMonica.Vehicles
             Vector3 torque = Vector3.Cross(transform.up, Vector3.up) * Def.mass * 3.2f * _submersion;
             Body.AddTorque(torque, ForceMode.Force);
 
-            if (speed > Def.TopSpeedMs) Body.linearVelocity = Vector3.ClampMagnitude(Body.linearVelocity, Def.TopSpeedMs);
+            if (speed > Def.TopSpeedMs) Body.velocity = Vector3.ClampMagnitude(Body.velocity, Def.TopSpeedMs);
             EngineRpmNormalised = Mathf.Clamp01(Mathf.Abs(throttle) * 0.7f + speed / Mathf.Max(1f, Def.TopSpeedMs) * 0.4f);
         }
     }
@@ -458,9 +458,9 @@ namespace SanMonica.Vehicles
                 Body.AddTorque(level * (Def.mass * 0.9f * _rotorSpeed), ForceMode.Force);
             }
 
-            Body.AddForce(-Body.linearVelocity * (Def.mass * 0.06f * _rotorSpeed), ForceMode.Force);
-            if (Body.linearVelocity.magnitude > Def.TopSpeedMs)
-                Body.linearVelocity = Vector3.ClampMagnitude(Body.linearVelocity, Def.TopSpeedMs);
+            Body.AddForce(-Body.velocity * (Def.mass * 0.06f * _rotorSpeed), ForceMode.Force);
+            if (Body.velocity.magnitude > Def.TopSpeedMs)
+                Body.velocity = Vector3.ClampMagnitude(Body.velocity, Def.TopSpeedMs);
 
             EngineRpmNormalised = _rotorSpeed;
         }
@@ -509,7 +509,7 @@ namespace SanMonica.Vehicles
             float target = powered ? Mathf.Clamp01(V.Throttle) : 0f;
             _thrust = Mathf.MoveTowards(_thrust, target, Time.fixedDeltaTime * 0.35f);
 
-            float forwardSpeed = Vector3.Dot(Body.linearVelocity, transform.forward);
+            float forwardSpeed = Vector3.Dot(Body.velocity, transform.forward);
             Body.AddForce(transform.forward * (_thrust * Def.enginePower * 26f), ForceMode.Force);
 
             // Lift grows with the square of airspeed, as it should.
@@ -517,7 +517,7 @@ namespace SanMonica.Vehicles
             Body.AddForce(transform.up * lift, ForceMode.Force);
 
             // Induced drag and airframe drag.
-            Body.AddForce(-Body.linearVelocity.normalized * (Body.linearVelocity.sqrMagnitude * Def.mass * 0.00035f), ForceMode.Force);
+            Body.AddForce(-Body.velocity.normalized * (Body.velocity.sqrMagnitude * Def.mass * 0.00035f), ForceMode.Force);
 
             float authority = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 40f) * Def.mass;
             Body.AddTorque(transform.right * (AirPitch * authority * 0.55f), ForceMode.Force);
@@ -525,9 +525,9 @@ namespace SanMonica.Vehicles
             Body.AddTorque(transform.up * (V.SteerInput * authority * 0.22f), ForceMode.Force);
 
             // Weathervane: the nose follows the velocity vector.
-            if (Body.linearVelocity.sqrMagnitude > 25f)
+            if (Body.velocity.sqrMagnitude > 25f)
             {
-                Vector3 align = Vector3.Cross(transform.forward, Body.linearVelocity.normalized);
+                Vector3 align = Vector3.Cross(transform.forward, Body.velocity.normalized);
                 Body.AddTorque(align * (Def.mass * 0.5f), ForceMode.Force);
             }
 

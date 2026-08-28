@@ -32,6 +32,40 @@ namespace SanMonica.EditorTools
         public static void BuildApk() => BuildFromCommandLine(false);
         public static void BuildAab() => BuildFromCommandLine(true);
 
+        /// <summary>
+        /// Continuous integration entry point. Reads SMO_BUILD_FORMAT ("apk" or
+        /// "aab") and SMO_ANDROID_ARCH ("arm64" or "both") from the environment,
+        /// so a workflow can pick both without editing any source file.
+        /// </summary>
+        public static void BuildFromEnvironment()
+        {
+            string format = Environment.GetEnvironmentVariable("SMO_BUILD_FORMAT");
+            bool appBundle = !string.IsNullOrEmpty(format) && format.Trim().ToLowerInvariant() == "aab";
+            string arch = Environment.GetEnvironmentVariable("SMO_ANDROID_ARCH");
+            Debug.Log($"[San Monica] CI build: format={(appBundle ? "aab" : "apk")}, architectures={(string.IsNullOrEmpty(arch) ? "both" : arch)}");
+            ApplyKeystoreFromArguments();
+            Build(appBundle, null, false);
+        }
+
+        /// <summary>
+        /// Compiles the project without building a player. Unity compiles every
+        /// script before it can invoke this method, so if anything is broken the
+        /// editor exits non-zero and this never runs.
+        /// </summary>
+        public static void CompileOnly()
+        {
+            ProjectAutoSetup.RunSetup(false);
+            int scenes = GetScenes().Length;
+            Debug.Log($"[San Monica] Compile check passed. Scenes in build: {scenes}.");
+            if (scenes == 0)
+            {
+                Debug.LogError("[San Monica] No scenes in the build settings after setup.");
+                if (IsBatchMode()) EditorApplication.Exit(1);
+                return;
+            }
+            if (IsBatchMode()) EditorApplication.Exit(0);
+        }
+
         private static void BuildFromCommandLine(bool appBundle)
         {
             string output = GetArgument("-outputPath");
@@ -76,7 +110,7 @@ namespace SanMonica.EditorTools
                 scenes = scenes,
                 locationPathName = outputPath,
                 target = BuildTarget.Android,
-                targetGroup = BuildTargetGroup.Android,
+                targetGroup = BuildPipeline.GetBuildTargetGroup(BuildTarget.Android),
                 options = development
                     ? BuildOptions.Development | BuildOptions.AllowDebugging
                     : BuildOptions.None

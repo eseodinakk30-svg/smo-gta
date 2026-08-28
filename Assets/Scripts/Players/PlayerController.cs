@@ -483,7 +483,7 @@ namespace SanMonica.Players
 
             CurrentVehicle = null;
             _enterVehicleCooldown = 0.6f;
-            _velocity = vehicle.Body != null ? Vector3.ClampMagnitude(vehicle.Body.linearVelocity, 6f) : Vector3.zero;
+            _velocity = vehicle.Body != null ? Vector3.ClampMagnitude(vehicle.Body.velocity, 6f) : Vector3.zero;
             _verticalVelocity = 0f;
             _fallStartY = transform.position.y;
 

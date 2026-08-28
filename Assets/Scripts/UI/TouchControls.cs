@@ -18,7 +18,15 @@ namespace SanMonica.UI
         [Header("Appearance")]
         [Range(0.6f, 1.8f)] public float Scale = 1f;
         [Range(0.15f, 1f)] public float Opacity = 0.55f;
-        public bool Enabled = true;
+        public bool Enabled = DefaultEnabled;
+
+        /// <summary>
+        /// On a phone the on-screen stick and buttons are the only way to play;
+        /// on a desktop build they would sit on top of the picture for a player
+        /// who is using the keyboard. A Windows machine with a touchscreen still
+        /// gets them, and either way the settings screen can override this.
+        /// </summary>
+        public static bool DefaultEnabled => Application.isMobilePlatform || Input.touchSupported;
         public bool EditMode;
 
         private RectTransform _root;

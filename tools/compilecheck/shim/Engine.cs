@@ -204,6 +204,7 @@ namespace UnityEngine
 
     public static class Application
     {
+        public static bool isMobilePlatform { get; set; }
         public static bool isEditor => false;
         public static bool isPlaying => true;
         public static bool isBatchMode => false;

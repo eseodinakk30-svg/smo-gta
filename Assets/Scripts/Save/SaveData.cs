@@ -101,7 +101,7 @@ namespace SanMonica.Saves
         public bool invertY;
         public float touchScale = 1f;
         public float touchOpacity = 0.55f;
-        public bool touchEnabled = true;
+        public bool touchEnabled = SanMonica.UI.TouchControls.DefaultEnabled;
         public float fieldOfView = 62f;
 
         public List<TouchButtonLayoutEntry> touchLayout = new List<TouchButtonLayoutEntry>();

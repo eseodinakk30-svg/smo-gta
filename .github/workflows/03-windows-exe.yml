@@ -1,0 +1,121 @@
+# Шаг 3: сборка версии для Windows (.exe) и публикация в Releases.
+# Actions -> "3. Сборка EXE (Windows)" -> Run workflow.
+#
+# Секреты те же, что и для APK: UNITY_EMAIL, UNITY_PASSWORD.
+#
+# Собирается на Linux-раннере с backend Mono: IL2CPP под Windows требует
+# компиляции сгенерированного C++ на самой Windows, чего здесь нет. На игру это
+# не влияет - разница только в скорости скриптов.
+name: "3. Сборка EXE (Windows)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Опубликовать архив в Releases"
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    name: Windows 64-bit (Mono)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить секреты до долгой работы
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          fail=0
+          [ -z "$UNITY_EMAIL" ]    && { echo "::error ::Нет секрета UNITY_EMAIL (почта аккаунта Unity)"; fail=1; }
+          [ -z "$UNITY_PASSWORD" ] && { echo "::error ::Нет секрета UNITY_PASSWORD (пароль аккаунта Unity)"; fail=1; }
+          [ "$fail" = "1" ] && { echo "Инструкция: docs/BUILD.md"; exit 1; }
+          echo "Секреты на месте."
+
+      - name: Поставить Unity Hub и починить путь к нему
+        uses: ./.github/actions/unity-hub
+
+      # Та же страховка, что и в сборке APK: Unity Hub иногда срывается на
+      # установке одного модуля, а повтор доставляет только его.
+      - name: Установить Unity с модулем Windows
+        id: unity_setup
+        continue-on-error: true
+        uses: buildalon/unity-setup@v2
+        with:
+          version-file: ProjectSettings/ProjectVersion.txt
+          build-targets: StandaloneWindows64
+          cache-installation: true
+
+      - name: Доустановить недостающие модули Unity
+        if: steps.unity_setup.outcome == 'failure'
+        uses: buildalon/unity-setup@v2
+        with:
+          version-file: ProjectSettings/ProjectVersion.txt
+          build-targets: StandaloneWindows64
+          cache-installation: true
+
+      - name: Активировать лицензию Unity
+        uses: buildalon/activate-unity-license@v2
+        with:
+          license: Personal
+          username: ${{ secrets.UNITY_EMAIL }}
+          password: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Собрать
+        uses: buildalon/unity-action@v2
+        with:
+          project-path: ${{ github.workspace }}
+          build-target: StandaloneWindows64
+          log-name: build-windows
+          args: -quit -batchmode -nographics -executeMethod SanMonica.EditorTools.BuildScript.BuildWindowsFromEnvironment
+
+      # Windows-плеер это не один файл: рядом с .exe обязаны лежать UnityPlayer.dll
+      # и папка SanMonica_Data. Поэтому в Releases кладётся архив целиком -
+      # запускать один вытащенный .exe бесполезно, он не стартует.
+      - name: Упаковать сборку в архив
+        id: package
+        run: |
+          [ -f Builds/Windows/SanMonica.exe ] || { echo "::error ::SanMonica.exe не найден"; ls -R Builds || true; exit 1; }
+          cd Builds/Windows
+          zip -qr ../SanMonica-Windows.zip .
+          cd ../..
+          ls -lh Builds/SanMonica-Windows.zip
+          echo "path=Builds/SanMonica-Windows.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Выложить как артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: SanMonica-windows
+          path: ${{ steps.package.outputs.path }}
+
+      - name: Опубликовать в Releases
+        if: ${{ github.event.inputs.release != 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ steps.package.outputs.path }}
+        run: |
+          TAG="win-$(date -u +%Y%m%d-%H%M)"
+          UNITY=$(head -1 ProjectSettings/ProjectVersion.txt | cut -d' ' -f2)
+          gh release create "$TAG" "$PACKAGE" \
+            --title "San Monica — Windows" \
+            --notes "Собрано Unity ${UNITY}, Windows 64-bit, backend Mono.
+
+          Распакуй архив целиком и запусти SanMonica.exe из папки. Один вытащенный
+          .exe не работает: рядом должны лежать UnityPlayer.dll и SanMonica_Data.
+
+          Управление: WASD, мышь — обзор, Shift — бег, Пробел — прыжок и ручник,
+          F — сесть в машину, E — действие, R — перезарядка, Q — оружие,
+          M — карта, N — радио, T — камера, Esc — пауза."
+
+      - name: Сохранить лог Unity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-logs-windows
+          path: "**/*.log"
+          if-no-files-found: ignore

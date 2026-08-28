@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
@@ -45,6 +46,76 @@ namespace SanMonica.EditorTools
             Debug.Log($"[San Monica] CI build: format={(appBundle ? "aab" : "apk")}, architectures={(string.IsNullOrEmpty(arch) ? "both" : arch)}");
             ApplyKeystoreFromArguments();
             Build(appBundle, null, false);
+        }
+
+        /// <summary>
+        /// Desktop build. The game reads keyboard, mouse and gamepad already, and
+        /// the on-screen stick hides itself on a platform without touch, so the
+        /// Windows player is the same game with the same seed - handy for looking
+        /// at the city on a big screen without flashing a phone.
+        ///
+        /// Scripting stays on Mono here: IL2CPP for Windows needs a Windows host
+        /// to compile the generated C++, and this builds on a Linux runner.
+        /// </summary>
+        [MenuItem("San Monica/Build/Windows (64-bit)", priority = 23)]
+        public static void BuildWindowsMenu() => BuildWindows(null, false);
+
+        public static void BuildWindowsFromEnvironment() => BuildWindows(null, false);
+
+        public static void BuildWindows(string outputPath, bool development)
+        {
+            ProjectAutoSetup.RunSetup(false);
+
+            var scenes = GetScenes();
+            if (scenes.Length == 0)
+            {
+                Debug.LogError("[San Monica] No scenes in the build settings.");
+                if (IsBatchMode()) EditorApplication.Exit(1);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                string directory = Path.Combine(Directory.GetCurrentDirectory(), "Builds", "Windows");
+                Directory.CreateDirectory(directory);
+                outputPath = Path.Combine(directory, "SanMonica.exe");
+            }
+            else
+            {
+                string directory = Path.GetDirectoryName(outputPath);
+                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            }
+
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Standalone, ManagedStrippingLevel.Disabled);
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
+            EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64);
+
+            var options = new BuildPlayerOptions
+            {
+                scenes = scenes,
+                locationPathName = outputPath,
+                target = BuildTarget.StandaloneWindows64,
+                targetGroup = BuildTargetGroup.Standalone,
+                options = development
+                    ? BuildOptions.Development | BuildOptions.AllowDebugging
+                    : BuildOptions.None
+            };
+
+            Debug.Log("[San Monica] Building Windows player to " + outputPath);
+            var report = BuildPipeline.BuildPlayer(options);
+            var summary = report.summary;
+
+            if (summary.result == BuildResult.Succeeded)
+            {
+                Debug.Log($"[San Monica] Windows build succeeded: {summary.outputPath} ({summary.totalTime})");
+                if (IsBatchMode()) EditorApplication.Exit(0);
+            }
+            else
+            {
+                Debug.LogError($"[San Monica] Windows build failed: {summary.result} with {summary.totalErrors} errors");
+                if (IsBatchMode()) EditorApplication.Exit(1);
+            }
         }
 
         /// <summary>

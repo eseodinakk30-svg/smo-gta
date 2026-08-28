@@ -25,6 +25,7 @@ namespace UnityEngine
 
     public static class Input
     {
+        public static bool touchSupported { get; set; }
         public static bool multiTouchEnabled { get; set; }
         public static int touchCount => 0;
         public static Touch[] touches => new Touch[0];

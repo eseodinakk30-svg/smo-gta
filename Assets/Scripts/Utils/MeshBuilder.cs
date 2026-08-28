@@ -275,6 +275,20 @@ namespace SanMonica.Utils
             }
         }
 
+        /// <summary>Overwrites the UVs of a vertex range - used for palette atlas mapping.</summary>
+        public void SetUVRange(int start, int end, Vector2 uv)
+        {
+            for (int i = Mathf.Max(0, start); i < Mathf.Min(end, _uv.Count); i++) _uv[i] = uv;
+        }
+
+        /// <summary>Applies a flat tint to a vertex range.</summary>
+        public void SetColorRange(int start, int end, Color32 color)
+        {
+            for (int i = Mathf.Max(0, start); i < Mathf.Min(end, _colors.Count); i++) _colors[i] = color;
+        }
+
+        public Vector3 GetVertex(int index) => _verts[index];
+
         public void RecalculateSmoothNormals()
         {
             for (int i = 0; i < _normals.Count; i++) _normals[i] = Vector3.zero;

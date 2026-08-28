@@ -50,8 +50,10 @@ namespace SanMonica.Core
             Physics.IgnoreLayerCollision(VehicleWheel, Building, false);
 
             Physics.IgnoreLayerCollision(Ped, Ped, true);
-            Physics.IgnoreLayerCollision(Ped, Ragdoll, true);
-            Physics.IgnoreLayerCollision(Ragdoll, Ragdoll, true);
+            // Hit boxes are raycast targets only until the character dies, at
+            // which point the ragdoll colliders move to the Prop layer.
+            for (int i = 0; i < 32; i++)
+                Physics.IgnoreLayerCollision(Ragdoll, i, true);
             Physics.IgnoreLayerCollision(Projectile, Projectile, true);
             Physics.IgnoreLayerCollision(Projectile, Trigger, true);
             Physics.IgnoreLayerCollision(Trigger, Trigger, true);

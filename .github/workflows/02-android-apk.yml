@@ -45,7 +45,7 @@ jobs:
           fail=0
           [ -z "$UNITY_EMAIL" ]    && { echo "::error ::Нет секрета UNITY_EMAIL (почта аккаунта Unity)"; fail=1; }
           [ -z "$UNITY_PASSWORD" ] && { echo "::error ::Нет секрета UNITY_PASSWORD (пароль аккаунта Unity)"; fail=1; }
-          [ "$fail" = "1" ] && { echo "Инструкция: раздел «Как получить APK» в README.md"; exit 1; }
+          [ "$fail" = "1" ] && { echo "Инструкция: docs/BUILD.md"; exit 1; }
           echo "Секреты на месте."
 
       # Android SDK раннера НЕ трогаем: если докачка компонентов у Unity Hub

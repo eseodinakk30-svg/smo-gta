@@ -32,16 +32,6 @@ jobs:
           [ "$fail" = "1" ] && { echo "Инструкция: docs/BUILD.md"; exit 1; }
           echo "Секреты на месте."
 
-      # То же, что и в сборке APK: предустановленный на раннере Android SDK
-      # ломает установку модулей Unity Hub, а указатели на него сбивают Unity.
-      - name: Убрать Android SDK раннера, чтобы он не мешал Unity Hub
-        run: |
-          sudo rm -rf /usr/local/lib/android
-          for v in ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK ANDROID_NDK_HOME \
-                   ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME; do
-            echo "$v=" >> "$GITHUB_ENV"
-          done
-
       - name: Поставить Unity Hub и починить путь к нему
         uses: ./.github/actions/unity-hub
 

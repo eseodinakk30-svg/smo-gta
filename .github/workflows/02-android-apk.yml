@@ -48,20 +48,13 @@ jobs:
           [ "$fail" = "1" ] && { echo "Инструкция: docs/BUILD.md"; exit 1; }
           echo "Секреты на месте."
 
-      # Unity Hub стабильно валился на модуле android-sdk-build-tools-34.0.0
-      # с голым "Installation Failed". Причина не в месте на диске - раннер
-      # приходит со 145 ГБ, из них 87 ГБ свободны, - а в том, что на раннере
-      # уже стоит свой Android SDK, ANDROID_HOME и ANDROID_SDK_ROOT указывают
-      # на него, и build-tools 34.0.0 в нём уже установлены. Установщик Hub
-      # видит занятое место назначения и падает. Убираем и сам SDK, и указатели
-      # на него, чтобы Hub поставил свой комплект с нуля.
-      - name: Убрать Android SDK раннера, чтобы он не мешал Unity Hub
+      # Места на раннере с запасом (145 ГБ, из них 87 свободны), но лишние
+      # гигабайты под кэш IL2CPP не мешают. Android SDK раннера НЕ трогаем: он
+      # ни на что не влияет, Unity ставит и использует свой комплект.
+      - name: Освободить место на раннере
         run: |
-          sudo rm -rf /usr/local/lib/android
-          for v in ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK ANDROID_NDK_HOME \
-                   ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME; do
-            echo "$v=" >> "$GITHUB_ENV"
-          done
+          sudo rm -rf /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost /usr/share/swift || true
           df -h /
 
       # Сборка только под ARM64 идёт примерно вдвое быстрее: IL2CPP

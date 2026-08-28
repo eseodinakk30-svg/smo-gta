@@ -167,7 +167,12 @@ namespace SanMonica.EditorTools
             var prop = serialized.FindProperty(property);
             if (prop == null) return;
             if (prop.propertyType == SerializedPropertyType.Boolean) prop.boolValue = value != 0;
-            else if (prop.propertyType == SerializedPropertyType.Enum) prop.enumValueIndex = value;
+            // intValue, not enumValueIndex: several of these URP enums store the
+            // value rather than the ordinal - shadow atlas sizes are 1024/2048/
+            // 4096 and MSAA is 1/2/4/8 - so an ordinal write throws "enum index
+            // is out of range" and the setting silently never lands. Writing the
+            // underlying int is correct for ordinal-valued enums as well.
+            else if (prop.propertyType == SerializedPropertyType.Enum) prop.intValue = value;
             else if (prop.propertyType == SerializedPropertyType.Integer) prop.intValue = value;
             else if (prop.propertyType == SerializedPropertyType.Float) prop.floatValue = value;
         }

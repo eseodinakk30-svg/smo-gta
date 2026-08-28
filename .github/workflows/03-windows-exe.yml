@@ -59,6 +59,24 @@ jobs:
           build-targets: StandaloneWindows64
           cache-installation: true
 
+      # Первая сборка упала на "Error building player because build target was
+      # unsupported": экшен поставил редактор, но не модуль Windows-плеера.
+      # Ставим его сами и проверяем, что playback engine действительно на месте -
+      # иначе падать через две минуты сборки, а не сразу, слишком дорого.
+      - name: Убедиться, что модуль Windows-плеера установлен
+        run: |
+          VER=$(head -1 ProjectSettings/ProjectVersion.txt | cut -d' ' -f2)
+          ENGINES="/home/runner/Unity/Hub/Editor/$VER/Editor/Data/PlaybackEngines"
+          if [ ! -d "$ENGINES/WindowsStandaloneSupport" ]; then
+            echo "Модуль не найден, ставлю windows-mono для $VER"
+            unity-hub --headless install-modules \
+              --version "$VER" --module windows-mono --childModules || true
+          fi
+          ls "$ENGINES" || true
+          [ -d "$ENGINES/WindowsStandaloneSupport" ] || {
+            echo "::error ::Модуль Windows-плеера не установился — сборка невозможна"; exit 1; }
+          echo "Модуль Windows-плеера на месте."
+
       - name: Активировать лицензию Unity
         uses: buildalon/activate-unity-license@v2
         with:

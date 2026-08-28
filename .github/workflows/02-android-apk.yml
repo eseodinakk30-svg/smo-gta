@@ -71,12 +71,30 @@ jobs:
       - name: Поставить Unity Hub и починить путь к нему
         uses: ./.github/actions/unity-hub
 
+      # Unity Hub регулярно роняет установку одного модуля с голым
+      # "Installation Failed", хотя всё уже скачано и остальные модули встали.
+      # Установка инкрементальная, так что вторая попытка доставляет только то,
+      # что не встало, и занимает секунды. Первая попытка поэтому не валит job.
       - name: Установить Unity с модулем Android
+        id: unity_setup
+        continue-on-error: true
         uses: buildalon/unity-setup@v2
         with:
           version-file: ProjectSettings/ProjectVersion.txt
           build-targets: Android
           cache-installation: true
+
+      - name: Доустановить недостающие модули Unity
+        if: steps.unity_setup.outcome == 'failure'
+        uses: buildalon/unity-setup@v2
+        with:
+          version-file: ProjectSettings/ProjectVersion.txt
+          build-targets: Android
+          cache-installation: true
+
+      - name: Место на диске после установки Unity
+        if: always()
+        run: df -h /
 
       - name: Активировать лицензию Unity
         uses: buildalon/activate-unity-license@v2

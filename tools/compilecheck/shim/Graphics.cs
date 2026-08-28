@@ -277,3 +277,68 @@ namespace UnityEngine
         public static Font CreateDynamicFontFromOSFont(string name, int size) => null;
     }
 }
+
+namespace UnityEngine.Rendering
+{
+    public class VolumeProfile : UnityEngine.ScriptableObject
+    {
+        public T Add<T>(bool overrides) where T : VolumeComponent => UnityEngine.ScriptableObject.CreateInstance<T>();
+    }
+
+    public class VolumeComponent : UnityEngine.ScriptableObject { }
+
+    public class Volume : UnityEngine.Component
+    {
+        public bool isGlobal { get; set; }
+        public float priority { get; set; }
+        public float weight { get; set; }
+        public VolumeProfile profile { get; set; }
+    }
+
+    public class VolumeParameter<T> { public void Override(T value) { } public T value { get; set; } }
+    public class FloatParameter : VolumeParameter<float> { }
+    public class ColorParameter : VolumeParameter<UnityEngine.Color> { }
+}
+
+namespace UnityEngine.Rendering.Universal
+{
+    public enum TonemappingMode { None, Neutral, ACES }
+
+    public class Bloom : VolumeComponent
+    {
+        public VolumeParameter<float> intensity = new VolumeParameter<float>();
+        public VolumeParameter<float> threshold = new VolumeParameter<float>();
+        public VolumeParameter<float> scatter = new VolumeParameter<float>();
+        public VolumeParameter<UnityEngine.Color> tint = new VolumeParameter<UnityEngine.Color>();
+    }
+
+    public class Tonemapping : VolumeComponent
+    {
+        public VolumeParameter<TonemappingMode> mode = new VolumeParameter<TonemappingMode>();
+    }
+
+    public class ColorAdjustments : VolumeComponent
+    {
+        public VolumeParameter<float> postExposure = new VolumeParameter<float>();
+        public VolumeParameter<float> contrast = new VolumeParameter<float>();
+        public VolumeParameter<float> saturation = new VolumeParameter<float>();
+        public VolumeParameter<UnityEngine.Color> colorFilter = new VolumeParameter<UnityEngine.Color>();
+    }
+
+    public class Vignette : VolumeComponent
+    {
+        public VolumeParameter<float> intensity = new VolumeParameter<float>();
+        public VolumeParameter<float> smoothness = new VolumeParameter<float>();
+    }
+
+    public class UniversalAdditionalCameraData : UnityEngine.Component
+    {
+        public bool renderPostProcessing { get; set; }
+        public bool renderShadows { get; set; }
+    }
+
+    public static class CameraExtensions
+    {
+        public static UniversalAdditionalCameraData GetUniversalAdditionalCameraData(this UnityEngine.Camera camera) => null;
+    }
+}

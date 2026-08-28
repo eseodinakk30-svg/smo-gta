@@ -116,7 +116,15 @@ namespace SanMonica.Vehicles
         private VehicleMotor CreateMotor(VehicleDefinition def)
         {
             var existing = GetComponent<VehicleMotor>();
-            if (existing != null) Destroy(existing);
+            if (existing != null) DestroyImmediate(existing);
+            // Wheel colliders belong to the previous motor - clear them out so a
+            // rebuilt vehicle does not end up driving on two sets of wheels.
+            for (int i = transform.childCount - 1; i >= 0; i--)
+            {
+                var child = transform.GetChild(i);
+                if (child.name.StartsWith("Wheel") || child.name.StartsWith("Gear") || child.name == "Rotor")
+                    DestroyImmediate(child.gameObject);
+            }
             if (def.vehicleClass == VehicleClass.Helicopter) return gameObject.AddComponent<HelicopterMotor>();
             if (def.vehicleClass == VehicleClass.Plane) return gameObject.AddComponent<PlaneMotor>();
             if (def.IsWatercraft) return gameObject.AddComponent<BoatMotor>();
@@ -126,7 +134,7 @@ namespace SanMonica.Vehicles
 
         private void BuildColliders(VehicleDefinition def)
         {
-            foreach (var old in GetComponents<BoxCollider>()) Destroy(old);
+            foreach (var old in GetComponents<BoxCollider>()) DestroyImmediate(old);
             float ride = def.IsWatercraft || def.vehicleClass == VehicleClass.Helicopter ? 0f : def.rideHeight;
             var box = gameObject.AddComponent<BoxCollider>();
             box.size = new Vector3(def.width * 0.96f, (def.height - ride) * 0.9f, def.length * 0.96f);

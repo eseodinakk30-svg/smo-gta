@@ -31,7 +31,9 @@ namespace SanMonica.Core
 
         public static readonly int GroundMask = (1 << Ground) | (1 << Building) | (1 << Terrain) | (1 << Road) | (1 << Prop) | (1 << Default);
         public static readonly int WorldMask = GroundMask | (1 << Vehicle);
-        public static readonly int ShootableMask = GroundMask | (1 << Vehicle) | (1 << Ped) | (1 << Player) | (1 << Ragdoll) | (1 << Foliage);
+        // Characters are hit through their per-bone hit boxes on the Ragdoll layer,
+        // never through the body capsule, so head and limb shots resolve correctly.
+        public static readonly int ShootableMask = GroundMask | (1 << Vehicle) | (1 << Ragdoll) | (1 << Foliage);
         public static readonly int CharacterMask = (1 << Ped) | (1 << Player);
         public static readonly int VisionBlockMask = (1 << Building) | (1 << Ground) | (1 << Terrain) | (1 << Prop);
         public static readonly int CameraCollisionMask = (1 << Building) | (1 << Ground) | (1 << Terrain) | (1 << Prop) | (1 << Road);

@@ -183,6 +183,9 @@ namespace SanMonica.Optimization
             var weather = Services.Weather;
             if (weather != null) weather.ParticlesEnabled = particles;
 
+            var post = Services.PostProcess;
+            if (post != null) post.SetEnabled(Preset != QualityPreset.Low, effectScale);
+
             var ui = Services.UI;
             if (ui != null && ui.Hud != null && ui.Hud.MinimapView != null)
                 ui.Hud.MinimapView.SetQuality(Preset == QualityPreset.Low ? 128 : (Preset == QualityPreset.Ultra ? 256 : 192),

@@ -226,7 +226,9 @@ namespace SanMonica.UI
             while (_blipPool.Count <= index)
             {
                 var rect = UIBuilder.Anchored("MapBlip" + _blipPool.Count, _blipRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(10f, 10f));
-                _blipPool.Add(UIBuilder.Circle(rect, Color.white));
+                var image = UIBuilder.Circle(rect, Color.white);
+                image.raycastTarget = false;
+                _blipPool.Add(image);
             }
             return _blipPool[index];
         }

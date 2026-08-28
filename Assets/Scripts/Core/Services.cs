@@ -52,6 +52,7 @@ namespace SanMonica.Core
         public static SanMonica.Atmosphere.TimeOfDaySystem Clock;
         public static SanMonica.Atmosphere.WeatherSystem Weather;
         public static SanMonica.Atmosphere.SkySystem Sky;
+        public static SanMonica.Atmosphere.PostProcessRig PostProcess;
 
         public static SanMonica.Audio.AudioSystem Audio;
         public static SanMonica.Audio.RadioSystem Radio;
@@ -88,7 +89,7 @@ namespace SanMonica.Core
             Wanted = null; Police = null; Weapons = null; Effects = null;
             Missions = null; Dialogue = null; RandomEvents = null;
             Economy = null; Shops = null; Property = null; Garage = null;
-            Clock = null; Weather = null; Sky = null; Audio = null; Radio = null;
+            Clock = null; Weather = null; Sky = null; PostProcess = null; Audio = null; Radio = null;
             UI = null; Save = null; Quality = null; Perf = null;
         }
     }

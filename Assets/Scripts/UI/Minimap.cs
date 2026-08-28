@@ -38,7 +38,6 @@ namespace SanMonica.UI
 
             var mask = inner.gameObject.AddComponent<Mask>();
             mask.showMaskGraphic = true;
-            var maskImage = inner.gameObject.GetComponent<RawImage>();
 
             _blipRoot = UIBuilder.Rect("Blips", inner, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
@@ -144,7 +143,9 @@ namespace SanMonica.UI
             while (_blipPool.Count <= index)
             {
                 var rt = UIBuilder.Anchored("Blip" + _blipPool.Count, _blipRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(9f, 9f));
-                _blipPool.Add(UIBuilder.Circle(rt, Color.white));
+                var image = UIBuilder.Circle(rt, Color.white);
+                image.raycastTarget = false;
+                _blipPool.Add(image);
             }
             return _blipPool[index];
         }

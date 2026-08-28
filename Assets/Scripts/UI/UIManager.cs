@@ -24,8 +24,8 @@ namespace SanMonica.UI
         private RectTransform _loadingScreen;
         private Text _loadingTitle, _loadingStatus;
         private Image _loadingBar;
-        private RectTransform _pauseScreen, _settingsScreen, _shopScreen, _saveScreen, _deathScreen;
-        private RectTransform _shopContent, _saveContent, _settingsContent;
+        private RectTransform _pauseScreen, _settingsScreen, _shopScreen, _saveScreen, _deathScreen, _garageScreen;
+        private RectTransform _shopContent, _saveContent, _settingsContent, _garageContent;
         private Text _shopTitle, _deathTitle, _deathSubtitle;
         private ShopInstance _activeShop;
         private CanvasScaler _scaler;
@@ -74,6 +74,7 @@ namespace SanMonica.UI
             Map.Build(_rootRect);
 
             BuildPauseScreen();
+            BuildGarageScreen();
             BuildSettingsScreen();
             BuildShopScreen();
             BuildSaveScreen();
@@ -146,11 +147,12 @@ namespace SanMonica.UI
         {
             _pauseScreen = BuildOverlay("PauseScreen", "PAUSED", out var body);
 
-            string[] labels = { "RESUME", "MAP", "SETTINGS", "SAVE GAME", "LOAD GAME", "QUIT TO DESKTOP" };
+            string[] labels = { "RESUME", "MAP", "GARAGE", "SETTINGS", "SAVE GAME", "LOAD GAME", "QUIT TO DESKTOP" };
             System.Action[] actions =
             {
                 () => Services.Game?.Resume(),
                 () => { ClosePause(); Services.Game?.OpenMap(); },
+                OpenGarage,
                 OpenSettings,
                 () => OpenSaveLoad(true),
                 () => OpenSaveLoad(false),
@@ -179,6 +181,76 @@ namespace SanMonica.UI
             if (_pauseScreen != null) _pauseScreen.gameObject.SetActive(false);
             if (_settingsScreen != null) _settingsScreen.gameObject.SetActive(false);
             if (_saveScreen != null) _saveScreen.gameObject.SetActive(false);
+            if (_garageScreen != null) _garageScreen.gameObject.SetActive(false);
+        }
+
+        // ------------------------------------------------------------------
+        private void BuildGarageScreen()
+        {
+            _garageScreen = BuildOverlay("GarageScreen", "YOUR COLLECTION", out var body);
+            var scrollRect = UIBuilder.Rect("Scroll", body, Vector2.zero, Vector2.one, new Vector2(0f, 130f), Vector2.zero);
+            UIBuilder.ScrollView(scrollRect, out _garageContent);
+
+            var claimRect = UIBuilder.Anchored("Claim", body, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 74f), new Vector2(520f, 54f));
+            UIBuilder.Button(claimRect, "CLAIM THE VEHICLE I AM DRIVING", new Color(0.18f, 0.32f, 0.24f, 0.98f), UIBuilder.TextPrimary,
+                () => { if (Services.Garage != null && Services.Garage.ClaimCurrentVehicle()) OpenGarage(); }, 20);
+
+            var closeRect = UIBuilder.Anchored("Close", body, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 8f), new Vector2(320f, 56f));
+            UIBuilder.Button(closeRect, "BACK", new Color(0.20f, 0.22f, 0.28f, 0.98f), UIBuilder.TextPrimary,
+                () => { if (_garageScreen != null) _garageScreen.gameObject.SetActive(false); });
+        }
+
+        public void OpenGarage()
+        {
+            if (_garageScreen == null || _garageContent == null) return;
+            for (int i = _garageContent.childCount - 1; i >= 0; i--) Destroy(_garageContent.GetChild(i).gameObject);
+
+            var garage = Services.Garage;
+            var database = Services.Database;
+            float cursor = 8f;
+
+            if (garage == null || garage.Collection.Count == 0)
+            {
+                var empty = UIBuilder.Anchored("Empty", _garageContent, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -cursor), new Vector2(900f, 60f));
+                UIBuilder.Label(empty, "You do not own any vehicles yet. Buy one from a dealership, or claim the car you are driving.",
+                    20, UIBuilder.TextMuted, TextAnchor.MiddleCenter);
+                cursor += 70f;
+            }
+            else
+            {
+                for (int i = 0; i < garage.Collection.Count; i++)
+                {
+                    var entry = garage.Collection[i];
+                    var definition = database?.Vehicle(entry.DefinitionId);
+                    string title = definition != null ? definition.displayName : entry.DefinitionId;
+                    string detail = "Engine " + entry.Engine + "  Brakes " + entry.Brakes + "  Grip " + entry.Grip + "  Armour " + entry.Armour;
+
+                    var row = UIBuilder.Anchored("Vehicle" + i, _garageContent, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -cursor), new Vector2(900f, 68f));
+                    UIBuilder.Image(row, new Color(0.10f, 0.12f, 0.16f, 0.95f));
+
+                    var nameRect = UIBuilder.Anchored("Name", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(18f, 13f), new Vector2(560f, 28f));
+                    UIBuilder.Label(nameRect, title, 24, UIBuilder.TextPrimary, TextAnchor.MiddleLeft, FontStyle.Bold);
+                    var detailRect = UIBuilder.Anchored("Detail", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(18f, -13f), new Vector2(560f, 22f));
+                    UIBuilder.Label(detailRect, detail, 17, UIBuilder.TextMuted);
+
+                    var deliverRect = UIBuilder.Anchored("Deliver", row, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(250f, 48f));
+                    var captured = entry;
+                    UIBuilder.Button(deliverRect, "DELIVER", new Color(0.20f, 0.26f, 0.38f, 0.98f), UIBuilder.TextPrimary,
+                        () =>
+                        {
+                            garage.Deliver(captured, Services.PlayerPosition);
+                            if (_garageScreen != null) _garageScreen.gameObject.SetActive(false);
+                            ClosePause();
+                            Services.Game?.Resume();
+                        }, 20);
+
+                    cursor += 76f;
+                }
+            }
+
+            _garageContent.sizeDelta = new Vector2(0f, cursor + 20f);
+            _garageScreen.gameObject.SetActive(true);
+            _garageScreen.SetAsLastSibling();
         }
 
         // ------------------------------------------------------------------

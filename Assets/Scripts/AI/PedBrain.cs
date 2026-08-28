@@ -180,7 +180,7 @@ namespace SanMonica.AI
             // story says so, the player.
             if (Archetype != null && Archetype.aggression > 0.4f)
             {
-                if (playerHostile && FactionRelations.IsHostileToPlayer(Faction) && Perception.CanSeePlayer)
+                if (FactionRelations.IsHostileToPlayer(Faction) && Perception.CanSeePlayer && DistanceToPlayer < 45f)
                 {
                     _threat = player.transform;
                     if (State != PedState.Combat) EnterState(PedState.Combat);

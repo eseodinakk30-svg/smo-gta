@@ -99,6 +99,8 @@ namespace SanMonica.Core
             Services.Weather.Initialize();
             Services.Sky = Add<Atmosphere.SkySystem>("Sky");
             Services.Sky.Initialize(Services.Clock, Services.Weather);
+            Services.PostProcess = Add<Atmosphere.PostProcessRig>("PostProcessing");
+            Services.PostProcess.Initialize(Services.Camera.Cam);
             Services.Water = Add<WaterSystem>("Water");
             Services.Water.Initialize(Services.Config, Services.Map);
             Services.Interiors = Add<InteriorSystem>("Interiors");

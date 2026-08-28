@@ -122,7 +122,10 @@ namespace SanMonica.EditorTools
 
             if (summary.result == BuildResult.Succeeded)
             {
-                Debug.Log($"[San Monica] Build succeeded: {summary.outputPath} ({summary.totalSize / (1024 * 1024)} MB, {summary.totalTime})");
+                // summary.totalSize counts the uncompressed payload, which for an
+                // APK reads about twenty times the file people actually download.
+                long onDisk = File.Exists(summary.outputPath) ? new FileInfo(summary.outputPath).Length : (long)summary.totalSize;
+                Debug.Log($"[San Monica] Build succeeded: {summary.outputPath} ({onDisk / (1024 * 1024)} MB on disk, {summary.totalTime})");
                 if (IsBatchMode()) EditorApplication.Exit(0);
             }
             else

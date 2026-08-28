@@ -38,6 +38,10 @@ namespace SanMonica.AI
 
         private void Update()
         {
+            // Nothing is spawned until the chunks around the player exist:
+            // peds and cars dropped into a world without colliders fall
+            // straight through it.
+            if (Services.Game == null || !Services.Game.WorldReady) return;
             if (_factory == null || _nav == null || !_nav.Ready) return;
             float dt = Time.deltaTime;
             Vector3 player = Services.PlayerPosition;

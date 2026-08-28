@@ -55,6 +55,10 @@ namespace SanMonica.Traffic
 
         private void Update()
         {
+            // Nothing is spawned until the chunks around the player exist:
+            // peds and cars dropped into a world without colliders fall
+            // straight through it.
+            if (Services.Game == null || !Services.Game.WorldReady) return;
             if (_roads == null) return;
             float dt = Time.deltaTime;
             Signals.Tick(dt);

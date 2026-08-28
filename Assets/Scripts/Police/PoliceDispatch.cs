@@ -59,6 +59,10 @@ namespace SanMonica.Police
         // ------------------------------------------------------------------
         private void Update()
         {
+            // Nothing is spawned until the chunks around the player exist:
+            // peds and cars dropped into a world without colliders fall
+            // straight through it.
+            if (Services.Game == null || !Services.Game.WorldReady) return;
             var wanted = Services.Wanted;
             if (wanted == null) return;
             float dt = Time.deltaTime;

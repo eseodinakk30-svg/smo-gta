@@ -1,0 +1,39 @@
+# Временный диагностический workflow: печатает состояние раннера до и после
+# очистки диска. Нужен, чтобы понять, почему Unity Hub не может поставить
+# Android SDK Build Tools. Удалить, когда сборка APK заработает.
+name: "99. Диагностика раннера"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Диск до очистки
+        run: df -h / && echo "---" && du -sh /usr/local/lib/android /opt/hostedtoolcache /usr/share/dotnet /usr/local/.ghcup /opt/az 2>/dev/null || true
+
+      - name: Переменные окружения Android
+        run: env | grep -i -E "android|java_home" | sort || echo "нет переменных Android"
+
+      - name: Что лежит в SDK раннера
+        run: |
+          ls /usr/local/lib/android/sdk 2>/dev/null || echo "нет /usr/local/lib/android/sdk"
+          echo "--- build-tools ---"
+          ls /usr/local/lib/android/sdk/build-tools 2>/dev/null || echo "нет build-tools"
+          echo "--- licenses ---"
+          ls /usr/local/lib/android/sdk/licenses 2>/dev/null || echo "нет licenses"
+
+      - name: Диск после текущей очистки из workflow сборки
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost /usr/share/swift || true
+          df -h /
+
+      - name: Диск после расширенной очистки
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL /usr/local/.ghcup /opt/az \
+                      /usr/local/share/powershell /usr/local/share/chromium || true
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          df -h /

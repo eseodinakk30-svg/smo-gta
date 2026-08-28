@@ -3,6 +3,7 @@ using UnityEngine;
 using SanMonica.Characters;
 using SanMonica.Core;
 using SanMonica.Data;
+using SanMonica.World;
 
 namespace SanMonica.AI
 {

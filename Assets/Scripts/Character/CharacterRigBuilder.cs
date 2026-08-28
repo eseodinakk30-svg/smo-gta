@@ -137,7 +137,7 @@ namespace SanMonica.Characters
             return rig;
         }
 
-        private static Mesh BuildBody(Transform root, Transform[] bones, in CharacterAppearance app, bool simplified)
+        private static Mesh BuildBody(Transform root, Transform[] bones, CharacterAppearance app, bool simplified)
         {
             float h = app.Height;
             float w = app.Build;

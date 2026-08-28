@@ -80,9 +80,11 @@ namespace SanMonica.Core
             Report(0.24f, "Building the street network");
             yield return null;
 
+            Report(0.28f, "Zoning the city blocks");
+            yield return null;
             var layout = new CityLayout(Services.Config, Services.Map, Services.Roads, Services.Database);
             layout.Generate();
-            Report(0.36f, "Zoning " + layout.Lots.Count.ToString("N0") + " lots");
+            Report(0.36f, layout.Lots.Count.ToString("N0") + " lots placed");
             yield return null;
 
             Services.Landmarks = new LandmarkRegistry();

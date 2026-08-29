@@ -15,6 +15,16 @@ namespace SanMonica.Players
     {
         [Header("Settings")]
         public float LookSensitivity = 1f;
+
+        /// <summary>
+        /// Unity's legacy input turns a touch into a fake mouse. On a phone that
+        /// meant the finger dragging the movement stick also produced Mouse X/Y
+        /// - so walking rotated the camera - and registered as mouse button 0,
+        /// so every touch fired the weapon. Simulation is switched off at boot;
+        /// this guard also ignores the mouse while a finger is down, which keeps
+        /// a real mouse working on a desktop or a tablet with one attached.
+        /// </summary>
+        private static bool MouseIsReal => Input.touchCount == 0;
         public float AimSensitivityMultiplier = 0.55f;
         public bool InvertY;
         public bool GamepadDetected;
@@ -102,9 +112,12 @@ namespace SanMonica.Players
             Vector2 look = _touchLook;
             _touchLook = Vector2.zero;
 
-            float mouseX = SafeAxis("Mouse X"), mouseY = SafeAxis("Mouse Y");
-            if (Mathf.Abs(mouseX) > 0.0001f || Mathf.Abs(mouseY) > 0.0001f)
-                look += new Vector2(mouseX, mouseY) * 2.2f;
+            if (MouseIsReal)
+            {
+                float mouseX = SafeAxis("Mouse X"), mouseY = SafeAxis("Mouse Y");
+                if (Mathf.Abs(mouseX) > 0.0001f || Mathf.Abs(mouseY) > 0.0001f)
+                    look += new Vector2(mouseX, mouseY) * 2.2f;
+            }
 
             Vector2 stick = new Vector2(SafeAxisRaw("RightStickX"), SafeAxisRaw("RightStickY"));
             if (stick.sqrMagnitude > 0.04f)
@@ -118,8 +131,8 @@ namespace SanMonica.Players
 
             // ---------------- Held ----------------
             _sprint = TouchHeld("sprint") || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.JoystickButton8);
-            _aim = TouchHeld("aim") || Input.GetMouseButton(1) || SafeAxisRaw("TriggerLeft") > 0.4f;
-            _fire = TouchHeld("fire") || Input.GetMouseButton(0) || SafeAxisRaw("TriggerRight") > 0.4f || Input.GetKey(KeyCode.JoystickButton5);
+            _aim = TouchHeld("aim") || (MouseIsReal && Input.GetMouseButton(1)) || SafeAxisRaw("TriggerLeft") > 0.4f;
+            _fire = TouchHeld("fire") || (MouseIsReal && Input.GetMouseButton(0)) || SafeAxisRaw("TriggerRight") > 0.4f || Input.GetKey(KeyCode.JoystickButton5);
             _handbrake = TouchHeld("handbrake") || Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.JoystickButton0);
             _crouch = TouchHeld("crouch") || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.C);
             _horn = TouchHeld("horn") || Input.GetKey(KeyCode.H) || Input.GetKey(KeyCode.JoystickButton9);

@@ -21,6 +21,9 @@ namespace SanMonica.Core
             Application.runInBackground = false;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Input.multiTouchEnabled = true;
+            // A touch must not also arrive as a mouse event: that made the
+            // movement stick turn the camera and fire the weapon at once.
+            Input.simulateMouseWithTouches = false;
             Physics.defaultSolverIterations = 6;
             Physics.defaultSolverVelocityIterations = 2;
             Time.fixedDeltaTime = 1f / 50f;

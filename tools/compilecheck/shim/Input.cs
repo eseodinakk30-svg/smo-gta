@@ -28,6 +28,7 @@ namespace UnityEngine
         public static bool touchSupported { get; set; }
         public static bool multiTouchEnabled { get; set; }
         public static int touchCount => 0;
+        public static bool simulateMouseWithTouches { get; set; }
         public static Touch[] touches => new Touch[0];
         public static Touch GetTouch(int index) => default;
         public static Vector3 mousePosition => default;

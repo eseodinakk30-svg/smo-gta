@@ -43,15 +43,18 @@ namespace SanMonica.UI
             _input = input;
             _root = UIBuilder.Rect("TouchControls", parent, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
-            // Look/aim surface covers the right half and sits behind the buttons.
-            var lookRect = UIBuilder.Rect("LookArea", _root, new Vector2(0.38f, 0f), new Vector2(1f, 1f), Vector2.zero, Vector2.zero);
+            // The look surface covers the whole screen and sits at the bottom of
+            // the sibling order, so the stick and the buttons - created after it -
+            // take their presses first and anything left over turns the camera.
+            // Previously it started at 38% and the top-left corner did nothing.
+            var lookRect = UIBuilder.Rect("LookArea", _root, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             var lookImage = UIBuilder.Image(lookRect, new Color(1f, 1f, 1f, 0f), false);
             lookImage.raycastTarget = true;
             _lookArea = lookRect.gameObject.AddComponent<TouchLookArea>();
             _lookArea.Bind(input);
 
             // Movement stick on the left.
-            var stickRect = UIBuilder.Rect("StickArea", _root, new Vector2(0f, 0f), new Vector2(0.38f, 0.72f), Vector2.zero, Vector2.zero);
+            var stickRect = UIBuilder.Rect("StickArea", _root, new Vector2(0f, 0f), new Vector2(0.42f, 0.78f), Vector2.zero, Vector2.zero);
             var stickImage = UIBuilder.Image(stickRect, new Color(1f, 1f, 1f, 0f), false);
             stickImage.raycastTarget = true;
             _stick = stickRect.gameObject.AddComponent<TouchStick>();
@@ -205,7 +208,7 @@ namespace SanMonica.UI
         {
             _input = input;
             _base = UIBuilder.Anchored("StickBase", (RectTransform)transform, new Vector2(0f, 0f), new Vector2(0.5f, 0.5f), new Vector2(200f, 200f), new Vector2(200f, 200f));
-            _baseImage = UIBuilder.Circle(_base, new Color(1f, 1f, 1f, 0.16f));
+            _baseImage = UIBuilder.Circle(_base, new Color(1f, 1f, 1f, 0.28f));
             _knob = UIBuilder.Anchored("StickKnob", _base, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(84f, 84f));
             _knobImage = UIBuilder.Circle(_knob, new Color(1f, 1f, 1f, 0.4f));
             _baseImage.raycastTarget = false;
@@ -219,8 +222,8 @@ namespace SanMonica.UI
             _radius = 100f * scale;
             if (_base != null) _base.sizeDelta = new Vector2(200f * scale, 200f * scale);
             if (_knob != null) _knob.sizeDelta = new Vector2(84f * scale, 84f * scale);
-            if (_baseImage != null) UIBuilder.SetAlpha(_baseImage, opacity * 0.35f);
-            if (_knobImage != null) UIBuilder.SetAlpha(_knobImage, opacity * 0.8f);
+            if (_baseImage != null) UIBuilder.SetAlpha(_baseImage, opacity * 0.55f);
+            if (_knobImage != null) UIBuilder.SetAlpha(_knobImage, Mathf.Min(1f, opacity * 1.25f));
         }
 
         public void OnPointerDown(PointerEventData eventData)
@@ -258,7 +261,14 @@ namespace SanMonica.UI
     // ------------------------------------------------------------------
     public class TouchLookArea : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler
     {
+        /// <summary>
+        /// Degrees of turn per screen height of swipe, before the player's own
+        /// sensitivity setting. Expressed against the screen rather than against
+        /// pixels so the camera feels identical on a 720p phone and a 1440p one -
+        /// raw pixel deltas made it twice as fast on a sharper screen.
+        /// </summary>
         public float Sensitivity = 0.16f;
+        private const float ReferenceHeight = 1080f;
         private InputHub _input;
         private int _pointerId = -99;
 
@@ -272,7 +282,8 @@ namespace SanMonica.UI
         public void OnDrag(PointerEventData eventData)
         {
             if (eventData.pointerId != _pointerId || _input == null) return;
-            _input.AddTouchLook(eventData.delta * Sensitivity);
+            float perScreen = ReferenceHeight / Mathf.Max(1f, Screen.height);
+            _input.AddTouchLook(eventData.delta * (Sensitivity * perScreen));
         }
 
         public void OnPointerUp(PointerEventData eventData)

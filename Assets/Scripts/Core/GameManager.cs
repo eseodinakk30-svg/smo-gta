@@ -244,6 +244,7 @@ namespace SanMonica.Core
             player.Initialize(appearance);
 
             player.Frozen = true;
+            gameObject.AddComponent<UI.DebugOverlay>();
             Services.Camera.SetTarget(go.transform);
             Services.Camera.SnapBehind(go.transform);
             LastSafePosition = spawn;

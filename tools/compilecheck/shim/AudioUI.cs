@@ -288,3 +288,42 @@ namespace UnityEngine
         public static bool RectangleContainsScreenPoint(RectTransform rect, Vector2 screenPoint, Camera cam) => false;
     }
 }
+
+// ---------------------------------------------------------------------------
+// IMGUI. Used only by the on-device diagnostic overlay, which deliberately does
+// not go through the game's own UI so it still draws when that is what is broken.
+namespace UnityEngine
+{
+    public class GUIStyleState
+    {
+        public Color textColor { get; set; }
+        public Texture2D background { get; set; }
+    }
+
+    public class GUIStyle
+    {
+        public GUIStyle() { }
+        public GUIStyle(GUIStyle other) { }
+        public int fontSize { get; set; }
+        public TextAnchor alignment { get; set; }
+        public bool wordWrap { get; set; }
+        public GUIStyleState normal { get; } = new GUIStyleState();
+    }
+
+    public class GUISkin
+    {
+        public GUIStyle label { get; } = new GUIStyle();
+        public GUIStyle box { get; } = new GUIStyle();
+    }
+
+    public static class GUI
+    {
+        public static GUISkin skin { get; set; } = new GUISkin();
+        public static Color color { get; set; }
+        public static void Label(Rect r, string text) { }
+        public static void Label(Rect r, string text, GUIStyle style) { }
+        public static void Box(Rect r, string text) { }
+        public static void DrawTexture(Rect r, Texture texture) { }
+        public static bool Button(Rect r, string text) => false;
+    }
+}

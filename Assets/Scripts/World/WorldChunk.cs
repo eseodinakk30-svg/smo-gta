@@ -9,6 +9,9 @@ namespace SanMonica.World
     {
         public Vector2Int Coord;
         public int Lod = -1;
+
+        /// <summary>True when this tile is actually carrying a floor.</summary>
+        public bool HasGroundCollider => _collider != null && _collider.enabled && _collider.sharedMesh != null;
         public Bounds Bounds;
 
         private MeshFilter _filter;

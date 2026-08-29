@@ -42,6 +42,21 @@ namespace SanMonica.World
         private bool _running;
 
         public int LoadedChunks => _chunks.Count;
+
+        /// <summary>How many loaded tiles actually have a working floor.</summary>
+        public int ChunksWithGround
+        {
+            get
+            {
+                int n = 0;
+                foreach (var kv in _chunks) if (kv.Value != null && kv.Value.HasGroundCollider) n++;
+                return n;
+            }
+        }
+
+        /// <summary>The tile the given world position sits on, or null.</summary>
+        public WorldChunk ChunkAt(Vector3 world)
+            => _cfg != null && _chunks.TryGetValue(_cfg.WorldToChunk(world), out var c) ? c : null;
         public int PendingChunks => _pending.Count;
         public bool WorldReady { get; private set; }
 

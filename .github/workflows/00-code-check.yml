@@ -22,3 +22,9 @@ jobs:
           dotnet-version: "8.0.x"
       - name: Скомпилировать против stub-сборки Unity
         run: dotnet build tools/compilecheck/CompileCheck.csproj -v q --nologo
+
+      # Генерация мира - обычный C#, поэтому её можно не только скомпилировать,
+      # но и выполнить: зонд строит чанк под точкой спавна и пускает по нему луч
+      # вниз. Три секунды здесь дешевле часовой сборки APK с дырой в земле.
+      - name: Проверить генерацию мира под точкой спавна
+        run: dotnet run --project tools/worldprobe/WorldProbe.csproj -v q --nologo

@@ -18,6 +18,9 @@ namespace SanMonica.Utils
         private readonly List<List<int>> _submeshes = new List<List<int>>();
 
         public int VertexCount => _verts.Count;
+        /// <summary>Read-only view of the built geometry, for offline probes and tests.</summary>
+        public IReadOnlyList<Vector3> Vertices => _verts;
+        public IReadOnlyList<int> Submesh(int index) => _submeshes[index];
         public int SubmeshCount => _submeshes.Count;
         public Color32 Tint = new Color32(255, 255, 255, 255);
 

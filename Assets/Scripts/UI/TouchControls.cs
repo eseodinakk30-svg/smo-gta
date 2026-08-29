@@ -193,6 +193,14 @@ namespace SanMonica.UI
         private float _radius = 100f;
         private float _opacity = 0.5f;
 
+        /// <summary>
+        /// Where the stick rests when nobody is touching it. A stick that is
+        /// invisible until found is not a control, it is a guess - so it sits
+        /// here in plain sight and only moves under the thumb once pressed.
+        /// Clear of the minimap in the corner.
+        /// </summary>
+        private static readonly Vector2 Home = new Vector2(230f, 250f);
+
         public void Build(InputHub input)
         {
             _input = input;
@@ -200,7 +208,9 @@ namespace SanMonica.UI
             _baseImage = UIBuilder.Circle(_base, new Color(1f, 1f, 1f, 0.16f));
             _knob = UIBuilder.Anchored("StickKnob", _base, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(84f, 84f));
             _knobImage = UIBuilder.Circle(_knob, new Color(1f, 1f, 1f, 0.4f));
-            _base.gameObject.SetActive(false);
+            _baseImage.raycastTarget = false;
+            _knobImage.raycastTarget = false;
+            _base.anchoredPosition = Home;
         }
 
         public void ApplyAppearance(float scale, float opacity)
@@ -221,7 +231,6 @@ namespace SanMonica.UI
             var parent = (RectTransform)transform;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, eventData.position, eventData.pressEventCamera, out var local);
             _base.anchoredPosition = local;
-            _base.gameObject.SetActive(true);
             _knob.anchoredPosition = Vector2.zero;
         }
 
@@ -241,7 +250,7 @@ namespace SanMonica.UI
         {
             if (eventData.pointerId != _pointerId) return;
             _pointerId = -99;
-            _base.gameObject.SetActive(false);
+            _base.anchoredPosition = Home;
             _input?.SetTouchMove(Vector2.zero);
         }
     }

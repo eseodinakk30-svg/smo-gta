@@ -30,7 +30,10 @@ namespace SanMonica.UI
         public void Build(RectTransform parent)
         {
             var frame = UIBuilder.Anchored("Minimap", parent, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(Size, Size));
-            UIBuilder.Circle(frame, new Color(0.04f, 0.05f, 0.07f, 0.9f));
+            // Nothing on the minimap may take a touch. It sits in the bottom left
+            // corner, which is exactly where a thumb reaches for the movement
+            // stick, and a raycast target here silently swallows every press.
+            UIBuilder.Circle(frame, new Color(0.04f, 0.05f, 0.07f, 0.9f)).raycastTarget = false;
 
             var inner = UIBuilder.Rect("Inner", frame, Vector2.zero, Vector2.one, new Vector2(4f, 4f), new Vector2(-4f, -4f));
             _display = inner.gameObject.AddComponent<RawImage>();
@@ -42,7 +45,7 @@ namespace SanMonica.UI
             _blipRoot = UIBuilder.Rect("Blips", inner, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
             _playerArrow = UIBuilder.Anchored("Player", inner, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(14f, 14f));
-            UIBuilder.Circle(_playerArrow, UIBuilder.Accent);
+            UIBuilder.Circle(_playerArrow, UIBuilder.Accent).raycastTarget = false;
 
             CreateCamera();
         }

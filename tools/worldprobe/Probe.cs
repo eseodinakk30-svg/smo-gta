@@ -49,7 +49,11 @@ internal static class Probe
         var coord = cfg.WorldToChunk(spawn);
         Console.WriteLine($"spawn chunk: {coord}  inBounds={cfg.InBounds(coord)}  origin={cfg.ChunkOrigin(coord)}");
 
-        var db = ScriptableObject.CreateInstance<GameDatabase>();
+        // GameDatabase.Build is what the game calls; CreateInstance alone leaves it
+        // empty, and an empty catalogue means no shops get placed at all.
+        var db = GameDatabase.Build();
+        Console.WriteLine($"database: {db.shops.Count} shop types, {db.vehicles.Count} vehicles, " +
+                          $"{db.weapons.Count} weapons, {db.peds.Count} ped archetypes");
         var layout = new CityLayout(cfg, map, roads, db);
         layout.Generate();
 
@@ -182,10 +186,202 @@ internal static class Probe
                                 ? $"{near} verts within 20 m of spawn, y {minY:0.##}..{maxY:0.##}"
                                 : "NO geometry within 20 m of the spawn"));
         }
+        CheckRoadNetwork(cfg, map, roads);
+        CheckBridges(cfg, map, roads, builder, geo);
+        CheckCityContent(cfg, map, roads, layout);
+
         Console.WriteLine(_failures == 0
             ? "world generation OK"
             : $"world generation FAILED {_failures} check(s)");
         return _failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// A bridge in the graph is worthless if no surface was built at deck
+    /// height: the car would simply drive into the bay. This casts down onto the
+    /// middle of each span the way physics does.
+    /// </summary>
+    private static void CheckBridges(WorldConfig cfg, WorldMap map, RoadNetwork roads,
+                                     ChunkBuilder builder, ChunkGeometry geo)
+    {
+        var bridges = new List<int>();
+        for (int i = 0; i < roads.Segments.Count; i++) if (roads.Segments[i].IsBridge) bridges.Add(i);
+        Console.WriteLine($"bridges: {bridges.Count} spans carry roads over water");
+        if (bridges.Count == 0) return;
+
+        int drivable = 0, dry = 0;
+        foreach (int i in bridges)
+        {
+            var seg = roads.Segments[i];
+            Vector2 mid = seg.Point(0.5f);
+            float deck = seg.DeckAt(0.5f);
+            if (deck > cfg.seaLevel + 3f) dry++;
+
+            var coord = cfg.WorldToChunk(new Vector3(mid.x, 0f, mid.y));
+            builder.Build(coord, 0, geo);
+            float hit = RaycastDown(geo, mid.x, mid.y, deck + 60f, out float faceY);
+            bool ok = hit > cfg.seaLevel + 1f && faceY > 0f && Mathf.Abs(hit - deck) < 3f;
+            if (ok) drivable++;
+            else
+                Console.WriteLine($"  span {i}: deck {deck:0.0} m, ray hit " +
+                                  (hit == float.NegativeInfinity ? "nothing" : $"{hit:0.0} m") +
+                                  (faceY > 0f ? "" : " (down-facing)"));
+        }
+        Console.WriteLine($"bridges: {dry}/{bridges.Count} clear the water, {drivable}/{bridges.Count} have a drivable deck");
+        if (dry < bridges.Count) Fail($"{bridges.Count - dry} bridge decks sit at or under the waterline");
+        if (drivable < bridges.Count) Fail($"{bridges.Count - drivable} bridges have no surface to drive on");
+    }
+
+    /// <summary>
+    /// The road graph is what traffic drives on and what missions navigate, so
+    /// a segment nobody connects to is a dead end no car can reach.
+    /// </summary>
+    private static void CheckRoadNetwork(WorldConfig cfg, WorldMap map, RoadNetwork roads)
+    {
+        int orphanNodes = 0, degenerate = 0, outOfBounds = 0, noSidewalk = 0;
+        for (int i = 0; i < roads.Segments.Count; i++)
+        {
+            var seg = roads.Segments[i];
+            if (seg.Length < 0.5f) degenerate++;
+            if (Mathf.Abs(seg.A.x) > cfg.HalfSize || Mathf.Abs(seg.A.y) > cfg.HalfSize ||
+                Mathf.Abs(seg.B.x) > cfg.HalfSize || Mathf.Abs(seg.B.y) > cfg.HalfSize) outOfBounds++;
+            if (seg.HalfWidth <= 0.1f) noSidewalk++;
+        }
+        for (int i = 0; i < roads.Nodes.Count; i++)
+            if (roads.Nodes[i].Segments.Count == 0) orphanNodes++;
+
+        Console.WriteLine($"roads: {roads.Segments.Count} segments, {roads.Nodes.Count} nodes, " +
+                          $"{degenerate} degenerate, {outOfBounds} outside the map, " +
+                          $"{noSidewalk} with no width, {orphanNodes} unconnected nodes");
+        if (degenerate > 0) Fail($"{degenerate} road segments are shorter than half a metre");
+        if (outOfBounds > 0) Fail($"{outOfBounds} road segments leave the map bounds");
+        if (noSidewalk > 0) Fail($"{noSidewalk} road segments have no width");
+
+        // Reachability: walk the graph from the busiest node and see what it reaches.
+        int start = 0;
+        for (int i = 1; i < roads.Nodes.Count; i++)
+            if (roads.Nodes[i].Segments.Count > roads.Nodes[start].Segments.Count) start = i;
+
+        var seen = new HashSet<int>();
+        var queue = new Queue<int>();
+        queue.Enqueue(start); seen.Add(start);
+        while (queue.Count > 0)
+        {
+            var node = roads.Nodes[queue.Dequeue()];
+            for (int i = 0; i < node.Segments.Count; i++)
+            {
+                var seg = roads.Segments[node.Segments[i]];
+                foreach (int next in new[] { seg.NodeA, seg.NodeB })
+                    if (next >= 0 && next < roads.Nodes.Count && seen.Add(next)) queue.Enqueue(next);
+            }
+        }
+        // Component sizes tell the difference between "one city with a few
+        // stranded lanes" and "thousands of little islands".
+        var visited = new HashSet<int>();
+        var sizes = new List<int>();
+        for (int n = 0; n < roads.Nodes.Count; n++)
+        {
+            if (visited.Contains(n)) continue;
+            int size = 0;
+            var q2 = new Queue<int>();
+            q2.Enqueue(n); visited.Add(n);
+            while (q2.Count > 0)
+            {
+                var nd = roads.Nodes[q2.Dequeue()]; size++;
+                for (int i = 0; i < nd.Segments.Count; i++)
+                {
+                    var sg = roads.Segments[nd.Segments[i]];
+                    foreach (int nx in new[] { sg.NodeA, sg.NodeB })
+                        if (nx >= 0 && nx < roads.Nodes.Count && visited.Add(nx)) q2.Enqueue(nx);
+                }
+            }
+            sizes.Add(size);
+        }
+        // For each surviving island, how far is the nearest other network and is
+        // the ground between it water? That is the difference between "raise the
+        // link limit" and "this needs a bridge".
+        {
+            var label = new int[roads.Nodes.Count];
+            for (int i = 0; i < label.Length; i++) label[i] = -1;
+            int comp = 0;
+            for (int seed = 0; seed < roads.Nodes.Count; seed++)
+            {
+                if (label[seed] >= 0) continue;
+                var st = new Stack<int>(); st.Push(seed); label[seed] = comp;
+                while (st.Count > 0)
+                {
+                    var nd = roads.Nodes[st.Pop()];
+                    for (int i = 0; i < nd.Segments.Count; i++)
+                    {
+                        var sg = roads.Segments[nd.Segments[i]];
+                        if (sg.NodeA >= 0 && label[sg.NodeA] < 0) { label[sg.NodeA] = comp; st.Push(sg.NodeA); }
+                        if (sg.NodeB >= 0 && label[sg.NodeB] < 0) { label[sg.NodeB] = comp; st.Push(sg.NodeB); }
+                    }
+                }
+                comp++;
+            }
+            for (int c = 0; c < comp; c++)
+            {
+                float best = float.MaxValue; int bi = -1, bj = -1;
+                for (int i = 0; i < roads.Nodes.Count; i++)
+                {
+                    if (label[i] != c) continue;
+                    for (int j = 0; j < roads.Nodes.Count; j++)
+                    {
+                        if (label[j] == c) continue;
+                        float d = (roads.Nodes[i].Pos - roads.Nodes[j].Pos).sqrMagnitude;
+                        if (d < best) { best = d; bi = i; bj = j; }
+                    }
+                }
+                if (bi < 0) continue;
+                Vector2 a = roads.Nodes[bi].Pos, b = roads.Nodes[bj].Pos;
+                int wet = 0, steps = 24;
+                float lowest = float.MaxValue;
+                for (int k = 0; k <= steps; k++)
+                {
+                    Vector2 pnt = Vector2.Lerp(a, b, k / (float)steps);
+                    float h = map.SampleHeight(pnt.x, pnt.y);
+                    if (h <= cfg.seaLevel + 1.2f) wet++;
+                    if (h < lowest) lowest = h;
+                }
+                Console.WriteLine($"  network {c}: nearest other network is {Mathf.Sqrt(best):0} m away, " +
+                                  $"{wet}/{steps + 1} samples under water, lowest ground {lowest:0.0} m");
+            }
+        }
+
+        sizes.Sort((a, b) => b.CompareTo(a));
+        Console.WriteLine($"road components: {sizes.Count} separate networks; largest = " +
+                          string.Join(", ", sizes.GetRange(0, Mathf.Min(6, sizes.Count))));
+        int degSum = 0;
+        for (int n = 0; n < roads.Nodes.Count; n++) degSum += roads.Nodes[n].Segments.Count;
+        Console.WriteLine($"average node degree: {(roads.Nodes.Count == 0 ? 0f : degSum / (float)roads.Nodes.Count):0.00}");
+
+        float reach = roads.Nodes.Count == 0 ? 0f : sizes[0] / (float)roads.Nodes.Count;
+        Console.WriteLine($"road reachability: {seen.Count} of {roads.Nodes.Count} nodes ({reach:P1}) " +
+                          "connected to the main network");
+        if (reach < 0.85f)
+            Fail($"only {reach:P1} of the road network is connected - traffic and missions cannot cross the city");
+    }
+
+    /// <summary>Shops and properties the player is sent to must exist and be placed sanely.</summary>
+    private static void CheckCityContent(WorldConfig cfg, WorldMap map, RoadNetwork roads, CityLayout layout)
+    {
+        int shops = layout.Shops.Count, properties = layout.Properties.Count;
+        Console.WriteLine($"city: {layout.Lots.Count} lots, {shops} shops, {properties} properties");
+        if (shops == 0) Fail("no shops were generated - the economy has nowhere to happen");
+        if (properties == 0) Fail("no properties were generated");
+
+        int farFromRoad = 0, sunk = 0;
+        for (int i = 0; i < shops; i++)
+        {
+            var shop = layout.Shops[i];
+            var flat = new Vector2(shop.Position.x, shop.Position.z);
+            if (roads.NearestSegment(flat, 220f) < 0) farFromRoad++;
+            if (shop.Position.y < map.SampleHeight(shop.Position.x, shop.Position.z) - 2f) sunk++;
+        }
+        Console.WriteLine($"shops: {farFromRoad} more than 220 m from any road, {sunk} below the terrain");
+        if (farFromRoad > shops / 10) Fail($"{farFromRoad} of {shops} shops are unreachable by road");
+        if (sunk > 0) Fail($"{sunk} shops are buried under the terrain");
     }
 
     /// <summary>Downward ray against every triangle in the geometry, Moller-Trumbore.</summary>

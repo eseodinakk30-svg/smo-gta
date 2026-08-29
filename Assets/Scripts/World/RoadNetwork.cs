@@ -20,8 +20,20 @@ namespace SanMonica.World
         public bool HasSidewalk;
         public float Jitter;         // tiny height offset that prevents z-fighting at junctions
 
+        /// <summary>
+        /// Set on the spans that carry a road over water. A bridge does not
+        /// follow the ground - it meets the banks at each end and arches over
+        /// whatever is between - so its height comes from DeckA, DeckB and Arch
+        /// rather than from the height field.
+        /// </summary>
+        public bool IsBridge;
+        public float DeckA, DeckB, Arch;
+
         public Vector2 Point(float t) => Vector2.Lerp(A, B, t);
         public Vector2 Right => new Vector2(Dir.y, -Dir.x);
+
+        /// <summary>Deck height along a bridge; meaningless for an ordinary road.</summary>
+        public float DeckAt(float t) => Mathf.Lerp(DeckA, DeckB, t) + Arch * Mathf.Sin(Mathf.PI * t);
     }
 
     public class RoadNode
@@ -68,8 +80,129 @@ namespace SanMonica.World
             BuildUrbanGrid();
             BuildRuralRoads();
             BuildAirport();
+            StitchComponents();
             BuildSpatialIndex();
             MarkIntersections();
+        }
+
+        /// <summary>
+        /// The four generators lay their roads independently, and where their
+        /// ends do not meet the city comes out as separate islands of tarmac -
+        /// fifteen of them, the largest holding under a third of the junctions.
+        /// Traffic then has nowhere to go and nothing that navigates by road can
+        /// cross town. This joins them up: each stranded network gets a link to
+        /// the nearest node of a bigger one, provided the ground between stays
+        /// above water, so genuine islands are left for a bridge or a boat.
+        /// </summary>
+        private void StitchComponents()
+        {
+            const float MaxLink = 420f;
+            const float MaxBridge = 520f;
+
+            for (int pass = 0; pass < 24; pass++)
+            {
+                var component = LabelComponents(out int count);
+                if (count <= 1) return;
+
+                // Size each component so the smaller ones are the ones that move.
+                var size = new int[count];
+                for (int i = 0; i < component.Length; i++) size[component[i]]++;
+                int biggest = 0;
+                for (int i = 1; i < count; i++) if (size[i] > size[biggest]) biggest = i;
+
+                bool linked = false;
+                for (int c = 0; c < count && !linked; c++)
+                {
+                    if (c == biggest) continue;
+
+                    // Prefer a road on solid ground; fall back to bridging the
+                    // shortest water crossing, which is what separates the two
+                    // halves of San Monica across the bay.
+                    int bestFrom = -1, bestTo = -1;
+                    float bestDist = MaxLink * MaxLink;
+                    int bridgeFrom = -1, bridgeTo = -1;
+                    float bridgeDist = MaxBridge * MaxBridge;
+
+                    for (int i = 0; i < Nodes.Count; i++)
+                    {
+                        if (component[i] != c) continue;
+                        for (int j = 0; j < Nodes.Count; j++)
+                        {
+                            if (component[j] == c) continue;
+                            float d = (Nodes[i].Pos - Nodes[j].Pos).sqrMagnitude;
+                            if (d < bestDist && LinkStaysOnLand(Nodes[i].Pos, Nodes[j].Pos))
+                            {
+                                bestDist = d; bestFrom = i; bestTo = j;
+                            }
+                            else if (d < bridgeDist && BanksAreDry(Nodes[i].Pos, Nodes[j].Pos))
+                            {
+                                bridgeDist = d; bridgeFrom = i; bridgeTo = j;
+                            }
+                        }
+                    }
+
+                    if (bestFrom >= 0)
+                        AddSegment(Nodes[bestFrom].Pos, Nodes[bestTo].Pos, RoadKind.Street, 1);
+                    else if (bridgeFrom >= 0)
+                        AddSegment(Nodes[bridgeFrom].Pos, Nodes[bridgeTo].Pos, RoadKind.Avenue, 1,
+                                   false, false, true);
+                    else continue;
+                    linked = true;
+                }
+                if (!linked) return;      // what is left is separated by water
+            }
+        }
+
+        /// <summary>Component index per node, via a flood fill over the segments.</summary>
+        private int[] LabelComponents(out int count)
+        {
+            var label = new int[Nodes.Count];
+            for (int i = 0; i < label.Length; i++) label[i] = -1;
+
+            count = 0;
+            var stack = new Stack<int>();
+            for (int start = 0; start < Nodes.Count; start++)
+            {
+                if (label[start] >= 0) continue;
+                label[start] = count;
+                stack.Push(start);
+                while (stack.Count > 0)
+                {
+                    var node = Nodes[stack.Pop()];
+                    for (int i = 0; i < node.Segments.Count; i++)
+                    {
+                        var seg = Segments[node.Segments[i]];
+                        int a = seg.NodeA, b = seg.NodeB;
+                        if (a >= 0 && label[a] < 0) { label[a] = count; stack.Push(a); }
+                        if (b >= 0 && label[b] < 0) { label[b] = count; stack.Push(b); }
+                    }
+                }
+                count++;
+            }
+            return label;
+        }
+
+        /// <summary>
+        /// A bridge still has to start and finish on dry land, or its ramps end
+        /// in the sea. The middle is allowed to be water - that is the point.
+        /// </summary>
+        private bool BanksAreDry(Vector2 a, Vector2 b)
+        {
+            float dry = _cfg.seaLevel + 1.5f;
+            return _map.SampleHeight(a.x, a.y) > dry && _map.SampleHeight(b.x, b.y) > dry;
+        }
+
+        /// <summary>A link is only worth laying where a car could actually drive.</summary>
+        private bool LinkStaysOnLand(Vector2 a, Vector2 b)
+        {
+            float length = Vector2.Distance(a, b);
+            int steps = Mathf.Max(4, Mathf.CeilToInt(length / 12f));
+            for (int i = 0; i <= steps; i++)
+            {
+                Vector2 p = Vector2.Lerp(a, b, i / (float)steps);
+                if (_map.SampleHeight(p.x, p.y) <= _cfg.seaLevel + 1.2f) return false;
+            }
+            return true;
         }
 
         private int GetNode(Vector2 p, RoadKind kind)
@@ -86,18 +219,29 @@ namespace SanMonica.World
             return idx;
         }
 
-        private void AddSegment(Vector2 a, Vector2 b, RoadKind kind, int lanes, bool oneWay = false, bool sidewalk = true)
+        private void AddSegment(Vector2 a, Vector2 b, RoadKind kind, int lanes, bool oneWay = false,
+                                bool sidewalk = true, bool bridge = false)
         {
             float len = Vector2.Distance(a, b);
             if (len < 4f) return;
             var seg = new RoadSegment
             {
+                IsBridge = bridge,
                 A = a, B = b, Length = len, Dir = (b - a) / len,
                 Kind = kind, LanesPerDirection = Mathf.Max(1, lanes), OneWay = oneWay,
                 HasSidewalk = sidewalk && kind != RoadKind.Highway && kind != RoadKind.Runway && kind != RoadKind.Taxiway,
                 Jitter = ((Segments.Count * 37) % 11) * 0.0016f
             };
             seg.HalfWidth = HalfWidthFor(kind, seg.LanesPerDirection, oneWay);
+            if (bridge)
+            {
+                seg.DeckA = _map.SampleHeight(a.x, a.y);
+                seg.DeckB = _map.SampleHeight(b.x, b.y);
+                // Rise enough for the middle of the span to clear the water with
+                // room for a boat, measured from the lower of the two banks.
+                float mid = (seg.DeckA + seg.DeckB) * 0.5f;
+                seg.Arch = Mathf.Max(0f, (_cfg.seaLevel + 7f) - mid);
+            }
             seg.NodeA = GetNode(a, kind);
             seg.NodeB = GetNode(b, kind);
             int si = Segments.Count;

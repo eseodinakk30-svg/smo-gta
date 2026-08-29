@@ -146,6 +146,8 @@ namespace SanMonica.World
                 float lift = 0.045f + s.Jitter;
                 EmitRibbon(geo, s, -s.HalfWidth, s.HalfWidth, lift, steps, surface, 0.12f);
 
+                if (s.IsBridge) EmitBridgeStructure(geo, s, steps, lod);
+
                 if (s.HasSidewalk && lod <= 1)
                 {
                     float inner = s.HalfWidth;
@@ -181,6 +183,50 @@ namespace SanMonica.World
             }
         }
 
+        /// <summary>
+        /// What turns a strip of tarmac over water into a bridge: parapets down
+        /// both sides so nothing drives off the edge, a slab under the deck so it
+        /// is not a floating ribbon seen from below, and piers standing on the
+        /// bed at intervals.
+        /// </summary>
+        private void EmitBridgeStructure(ChunkGeometry geo, in RoadSegment s, int steps, int lod)
+        {
+            var concrete = MaterialLibrary.Surface(SurfaceKind.Concrete, 0, new Color(0.70f, 0.70f, 0.72f), 0.16f);
+            float edge = s.HalfWidth + 0.25f;
+
+            // Parapets: a solid wall on each side, tall enough to stop a car.
+            EmitVerticalStrip(geo, s, edge, 0.05f, 1.15f, steps, concrete);
+            EmitVerticalStrip(geo, s, -edge, 0.05f, 1.15f, steps, concrete);
+            // Underside, so the deck reads as a structure from the water.
+            EmitRibbon(geo, s, -edge, edge, -0.85f, steps, concrete, 0.2f);
+
+            if (lod > 1) return;
+
+            // Piers, spaced along the span and stopping at the bed.
+            int piers = Mathf.Clamp(Mathf.RoundToInt(s.Length / 45f), 1, 8);
+            int sub = geo.Sub(concrete);
+            for (int i = 1; i <= piers; i++)
+            {
+                float t = i / (float)(piers + 1);
+                Vector2 c = s.Point(t);
+                float deck = s.DeckAt(t) - 0.9f;
+                float bed = _map.SampleHeight(c.x, c.y);
+                float height = deck - bed;
+                if (height < 1.5f) continue;
+                geo.Builder.AddBox(new Vector3(c.x, bed + height * 0.5f, c.y),
+                                   new Vector3(2.4f, height, 2.4f), Quaternion.Euler(0f, s.Kind == RoadKind.Highway ? 0f : 0f, 0f),
+                                   0.12f, sub);
+            }
+        }
+
+        /// <summary>
+        /// Height of a road surface at parameter t. A bridge carries its own
+        /// deck across the water instead of following the seabed, so it must not
+        /// be sampled from the height field like every other road.
+        /// </summary>
+        private float SurfaceY(in RoadSegment s, float t, float x, float z)
+            => s.IsBridge ? s.DeckAt(t) : _map.SampleHeight(x, z);
+
         private void EmitRibbon(ChunkGeometry geo, in RoadSegment s, float offA, float offB, float lift, int steps, Material mat, float uvScale)
         {
             int sub = geo.Sub(mat);
@@ -192,8 +238,9 @@ namespace SanMonica.World
                 Vector2 c = s.Point(t);
                 Vector2 a2 = c + right * offA;
                 Vector2 b2 = c + right * offB;
-                Vector3 a = new Vector3(a2.x, _map.SampleHeight(a2.x, a2.y) + lift, a2.y);
-                Vector3 b = new Vector3(b2.x, _map.SampleHeight(b2.x, b2.y) + lift, b2.y);
+                float surface = SurfaceY(s, t, a2.x, a2.y) + lift;
+                Vector3 a = new Vector3(a2.x, surface, a2.y);
+                Vector3 b = new Vector3(b2.x, s.IsBridge ? surface : _map.SampleHeight(b2.x, b2.y) + lift, b2.y);
                 if (i > 0)
                 {
                     float v0 = (i - 1) * s.Length / steps * uvScale;
@@ -218,7 +265,7 @@ namespace SanMonica.World
             {
                 float t = i / (float)steps;
                 Vector2 c = s.Point(t) + right * offset;
-                float h = _map.SampleHeight(c.x, c.y);
+                float h = SurfaceY(s, t, c.x, c.y);
                 Vector3 low = new Vector3(c.x, h + yLow, c.y);
                 Vector3 high = new Vector3(c.x, h + yHigh, c.y);
                 if (i > 0)
@@ -246,10 +293,12 @@ namespace SanMonica.World
                 Vector2 c0 = s.Point(t0) + right * offset;
                 Vector2 c1 = s.Point(t1) + right * offset;
                 Vector2 w = right * halfWidth;
-                Vector3 a = new Vector3(c0.x - w.x, _map.SampleHeight(c0.x, c0.y) + lift, c0.y - w.y);
-                Vector3 b = new Vector3(c0.x + w.x, _map.SampleHeight(c0.x, c0.y) + lift, c0.y + w.y);
-                Vector3 c = new Vector3(c1.x + w.x, _map.SampleHeight(c1.x, c1.y) + lift, c1.y + w.y);
-                Vector3 d = new Vector3(c1.x - w.x, _map.SampleHeight(c1.x, c1.y) + lift, c1.y - w.y);
+                float y0 = SurfaceY(s, t0, c0.x, c0.y) + lift;
+                float y1 = SurfaceY(s, t1, c1.x, c1.y) + lift;
+                Vector3 a = new Vector3(c0.x - w.x, y0, c0.y - w.y);
+                Vector3 b = new Vector3(c0.x + w.x, y0, c0.y + w.y);
+                Vector3 c = new Vector3(c1.x + w.x, y1, c1.y + w.y);
+                Vector3 d = new Vector3(c1.x - w.x, y1, c1.y - w.y);
                 int i0 = geo.Builder.AddVertex(a, Vector3.up, Vector2.zero);
                 int i1 = geo.Builder.AddVertex(b, Vector3.up, new Vector2(1f, 0f));
                 int i2 = geo.Builder.AddVertex(c, Vector3.up, Vector2.one);

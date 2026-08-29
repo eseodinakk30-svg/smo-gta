@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>SanMonicaWorldProbe</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <NoWarn>CS0414;CS0169;CS0649;CS0162;CS0219;CS0067;CS0108;CS0114;CS0660;CS0661;CS0472;CS8509;CS1717</NoWarn>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <DefineConstants>$(DefineConstants);UNITY_ANDROID</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../compilecheck/shim/**/*.cs" />
+    <!-- Editor scripts are left out: the probe runs the game's world generation,
+         not the editor tooling, and UNITY_EDITOR is deliberately not defined. -->
+    <Compile Include="../../Assets/Scripts/**/*.cs" Exclude="../../Assets/Scripts/Editor/**/*.cs" />
+    <Compile Include="Probe.cs" />
+  </ItemGroup>
+</Project>

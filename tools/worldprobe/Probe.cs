@@ -9,6 +9,14 @@ using SanMonica.World;
 
 internal static class Probe
 {
+    private static int _failures;
+
+    private static void Fail(string message)
+    {
+        _failures++;
+        Console.WriteLine("FAIL: " + message);
+    }
+
     private static int Main()
     {
         var cfg = WorldConfig.CreateDefault();
@@ -52,7 +60,9 @@ internal static class Probe
         // the triangles of the chunk mesh. Vertices "near" the spawn prove nothing
         // on their own - a hole in the surface has vertices all around its edge.
         builder.Build(coord, 0, geo);
-        float hit = RaycastDown(geo, spawn.x, spawn.z, spawn.y + 100f);
+        float hit = RaycastDown(geo, spawn.x, spawn.z, spawn.y + 100f, out float faceY);
+        if (faceY > 0f) Console.WriteLine("  surface under the spawn faces UP - a downward raycast would report it");
+        else Fail("the surface under the spawn faces DOWN - Physics.Raycast will not report it");
         Console.WriteLine(hit > float.NegativeInfinity
             ? $"RAY DOWN at spawn hits mesh at y={hit:0.###}  (spawn y={spawn.y:0.###})"
             : "RAY DOWN at spawn hits NOTHING - there is a hole in the mesh here");
@@ -60,6 +70,28 @@ internal static class Probe
         // Is the spawn buried inside a solid collider? A player standing inside a
         // building box is pushed somewhere unpredictable, which looks exactly like
         // falling through an intact floor.
+        // Winding. Unity treats Cross(b-a, c-a) as the front face, culls back
+        // faces when rendering and - crucially - Physics.Raycast does not report
+        // a hit on a back face, while a CharacterController capsule still
+        // collides with it. Ground wound the wrong way is therefore solid to
+        // stand on and invisible to every raycast the game does.
+        int up = 0, down = 0;
+        {
+            var verts = geo.Builder.Vertices;
+            for (int sub = 0; sub < geo.Builder.SubmeshCount; sub++)
+            {
+                var tris = geo.Builder.Submesh(sub);
+                for (int i = 0; i + 2 < tris.Count; i += 3)
+                {
+                    Vector3 a = verts[tris[i]], b = verts[tris[i + 1]], c = verts[tris[i + 2]];
+                    Vector3 fn = Vector3.Cross(b - a, c - a);
+                    if (fn.y > 0.001f) up++;
+                    else if (fn.y < -0.001f) down++;
+                }
+            }
+        }
+        Console.WriteLine($"triangle winding: {up} face up, {down} face down (front = Cross(b-a, c-a))");
+
         int inside = 0;
         for (int i = 0; i < geo.Boxes.Count; i++)
         {
@@ -76,14 +108,56 @@ internal static class Probe
         }
         Console.WriteLine($"solid boxes containing the spawn point: {inside} (rotation ignored, axis-aligned test)");
 
-        int misses = 0;
+        int misses = 0, flipped = 0;
         for (int gx = -4; gx <= 4; gx++)
         for (int gz = -4; gz <= 4; gz++)
         {
             float px = spawn.x + gx * 3f, pz = spawn.z + gz * 3f;
-            if (RaycastDown(geo, px, pz, spawn.y + 100f) == float.NegativeInfinity) misses++;
+            if (RaycastDown(geo, px, pz, spawn.y + 100f, out float fy) == float.NegativeInfinity) misses++;
+            else if (fy <= 0f) flipped++;
         }
-        Console.WriteLine($"9x9 grid of 3 m samples around the spawn: {misses} of 81 hit nothing");
+        Console.WriteLine($"9x9 grid of 3 m samples around the spawn: {misses} of 81 hit nothing, " +
+                          $"{flipped} of 81 land on a DOWN-facing surface");
+        if (misses > 0) Fail($"{misses} of 81 samples around the spawn hit no geometry at all");
+        if (flipped > 0) Fail($"{flipped} of 81 samples around the spawn land on an inside-out surface");
+
+        // The spawn tile is one of four thousand. Sweep the map so a surface
+        // wound the wrong way in some other district cannot hide.
+        {
+            var rng = new System.Random(1);
+            int sampled = 0, hits = 0, flippedAll = 0, empty = 0;
+            var worst = new List<string>();
+            for (int n = 0; n < 60; n++)
+            {
+                var c = new Vector2Int(rng.Next(6, cfg.ChunkCount - 6), rng.Next(6, cfg.ChunkCount - 6));
+                builder.Build(c, 0, geo);
+                Vector3 o = cfg.ChunkOrigin(c);
+                int chunkFlipped = 0;
+                for (int gx = 1; gx < 8; gx++)
+                for (int gz = 1; gz < 8; gz++)
+                {
+                    float px = o.x + gx * (cfg.chunkSize / 8f);
+                    float pz = o.z + gz * (cfg.chunkSize / 8f);
+                    sampled++;
+                    float y = RaycastDown(geo, px, pz, 900f, out float fy);
+                    if (y == float.NegativeInfinity) { empty++; continue; }
+                    hits++;
+                    if (fy <= 0f)
+                    {
+                        flippedAll++; chunkFlipped++;
+                        if (worst.Count < 14)
+                            Console.WriteLine($"  flipped hit at ({px:0.#}, {y:0.##}, {pz:0.#}) " +
+                                              $"= terrain {map.SampleHeight(px, pz):0.##} + {y - map.SampleHeight(px, pz):0.##}");
+                    }
+                }
+                if (chunkFlipped > 0) worst.Add($"{c}:{chunkFlipped}");
+            }
+            Console.WriteLine($"map sweep: {sampled} samples over 60 chunks - {hits} hit a surface, " +
+                              $"{empty} hit nothing (water//sea is expected), {flippedAll} landed on a DOWN-facing surface");
+            if (worst.Count > 0) Console.WriteLine("  chunks still flipped: " + string.Join(", ", worst));
+            if (flippedAll > 0)
+                Fail($"{flippedAll} of {sampled} samples across the map land on an inside-out surface");
+        }
 
         for (int lod = 0; lod <= 2; lod++)
         {
@@ -108,12 +182,19 @@ internal static class Probe
                                 ? $"{near} verts within 20 m of spawn, y {minY:0.##}..{maxY:0.##}"
                                 : "NO geometry within 20 m of the spawn"));
         }
-        return 0;
+        Console.WriteLine(_failures == 0
+            ? "world generation OK"
+            : $"world generation FAILED {_failures} check(s)");
+        return _failures == 0 ? 0 : 1;
     }
 
     /// <summary>Downward ray against every triangle in the geometry, Moller-Trumbore.</summary>
     private static float RaycastDown(ChunkGeometry geo, float x, float z, float fromY)
+        => RaycastDown(geo, x, z, fromY, out _);
+
+    private static float RaycastDown(ChunkGeometry geo, float x, float z, float fromY, out float faceUpY)
     {
+        faceUpY = 0f;
         var verts = geo.Builder.Vertices;
         float best = float.NegativeInfinity;
         var origin = new Vector3(x, fromY, z);
@@ -139,7 +220,7 @@ internal static class Probe
                 float t = Vector3.Dot(e2, q) * inv;
                 if (t <= 0f) continue;
                 float y = fromY - t;
-                if (y > best) best = y;
+                if (y > best) { best = y; faceUpY = Vector3.Cross(e1, e2).y; }
             }
         }
         return best;

@@ -71,8 +71,7 @@ namespace SanMonica.World
                 int i1 = geo.Builder.AddVertex(p10, n, new Vector2(p10.x, p10.z) * 0.09f);
                 int i2 = geo.Builder.AddVertex(p11, n, new Vector2(p11.x, p11.z) * 0.09f);
                 int i3 = geo.Builder.AddVertex(p01, n, new Vector2(p01.x, p01.z) * 0.09f);
-                geo.Builder.AddTriangle(i0, i1, i2, sub);
-                geo.Builder.AddTriangle(i0, i2, i3, sub);
+                geo.Builder.AddQuadFacing(i0, i1, i2, i3, Vector3.up, sub);
             }
         }
 
@@ -204,8 +203,7 @@ namespace SanMonica.World
                     int i1 = geo.Builder.AddVertex(prevR, Vector3.up, new Vector2(w, v0));
                     int i2 = geo.Builder.AddVertex(b, Vector3.up, new Vector2(w, v1));
                     int i3 = geo.Builder.AddVertex(a, Vector3.up, new Vector2(0f, v1));
-                    geo.Builder.AddTriangle(i0, i1, i2, sub);
-                    geo.Builder.AddTriangle(i0, i2, i3, sub);
+                    geo.Builder.AddQuadFacing(i0, i1, i2, i3, Vector3.up, sub);
                 }
                 prevL = a; prevR = b;
             }
@@ -230,8 +228,7 @@ namespace SanMonica.World
                     int i1 = geo.Builder.AddVertex(low, n, new Vector2(1f, 0f));
                     int i2 = geo.Builder.AddVertex(high, n, new Vector2(1f, 1f));
                     int i3 = geo.Builder.AddVertex(prevHigh, n, new Vector2(0f, 1f));
-                    geo.Builder.AddTriangle(i0, i1, i2, sub);
-                    geo.Builder.AddTriangle(i0, i2, i3, sub);
+                    geo.Builder.AddQuadFacing(i0, i1, i2, i3, n, sub);
                 }
                 prevLow = low; prevHigh = high;
             }
@@ -257,8 +254,7 @@ namespace SanMonica.World
                 int i1 = geo.Builder.AddVertex(b, Vector3.up, new Vector2(1f, 0f));
                 int i2 = geo.Builder.AddVertex(c, Vector3.up, Vector2.one);
                 int i3 = geo.Builder.AddVertex(d, Vector3.up, new Vector2(0f, 1f));
-                geo.Builder.AddTriangle(i0, i1, i2, sub);
-                geo.Builder.AddTriangle(i0, i2, i3, sub);
+                geo.Builder.AddQuadFacing(i0, i1, i2, i3, Vector3.up, sub);
                 pos += dash + gap;
             }
         }

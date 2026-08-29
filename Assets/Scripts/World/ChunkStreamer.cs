@@ -328,8 +328,7 @@ namespace SanMonica.World
                     int i1 = geo.Builder.AddVertex(p10, n, new Vector2(p10.x, p10.z) * 0.01f);
                     int i2 = geo.Builder.AddVertex(p11, n, new Vector2(p11.x, p11.z) * 0.01f);
                     int i3 = geo.Builder.AddVertex(p01, n, new Vector2(p01.x, p01.z) * 0.01f);
-                    geo.Builder.AddTriangle(i0, i1, i2, sub);
-                    geo.Builder.AddTriangle(i0, i2, i3, sub);
+                    geo.Builder.AddQuadFacing(i0, i1, i2, i3, Vector3.up, sub);
                 }
                 if ((z & 7) == 0) { onProgress?.Invoke(0.6f + z / (float)res * 0.2f); yield return null; }
             }

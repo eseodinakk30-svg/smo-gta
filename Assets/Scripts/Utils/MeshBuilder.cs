@@ -60,6 +60,27 @@ namespace SanMonica.Utils
         }
 
         /// <summary>Adds a quad with counter clockwise winding when viewed from the normal side.</summary>
+        /// <summary>
+        /// Adds a triangle wound so its front face points the way the caller
+        /// means it to. Unity culls back faces and, more importantly,
+        /// Physics.Raycast refuses to report a hit on one - a floor wound the
+        /// wrong way is solid to walk on and invisible to every raycast the game
+        /// makes, which is a great deal harder to notice than a hole.
+        /// </summary>
+        public void AddTriangleFacing(int a, int b, int c, Vector3 desiredNormal, int sub = 0)
+        {
+            Vector3 face = Vector3.Cross(_verts[b] - _verts[a], _verts[c] - _verts[a]);
+            if (Vector3.Dot(face, desiredNormal) < 0f) AddTriangle(a, c, b, sub);
+            else AddTriangle(a, b, c, sub);
+        }
+
+        /// <summary>Two triangles over four corner indices, all facing the given way.</summary>
+        public void AddQuadFacing(int i0, int i1, int i2, int i3, Vector3 desiredNormal, int sub = 0)
+        {
+            AddTriangleFacing(i0, i1, i2, desiredNormal, sub);
+            AddTriangleFacing(i0, i2, i3, desiredNormal, sub);
+        }
+
         public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector2 uvScale, int sub = 0, Vector2 uvOffset = default)
         {
             Vector3 n = Vector3.Cross(b - a, d - a).normalized;
@@ -82,10 +103,10 @@ namespace SanMonica.Utils
                 Vector2 uv = new Vector2(p.x, p.z) * uvScale + new Vector2(0.5f, 0.5f);
                 int idx = AddVertex(p, normal, uv);
                 if (first < 0) first = idx;
-                else AddTriangle(c, prev, idx, sub);
+                else AddTriangleFacing(c, prev, idx, normal, sub);
                 prev = idx;
             }
-            if (first >= 0 && prev >= 0) AddTriangle(c, prev, first, sub);
+            if (first >= 0 && prev >= 0) AddTriangleFacing(c, prev, first, normal, sub);
         }
 
         /// <summary>Axis aligned box (optionally rotated) with per-face uv derived from world size.</summary>
@@ -117,6 +138,14 @@ namespace SanMonica.Utils
             if (n < 3) return;
             float topY = baseY + height;
             float u = 0f;
+
+            // Which way round the caller wound the footprint decides which way
+            // the walls and caps end up facing, and the callers are not
+            // consistent. Everything below is oriented explicitly instead:
+            // walls away from the centre, the top cap up, the bottom cap down.
+            Vector2 centre = Vector2.zero;
+            for (int i = 0; i < n; i++) centre += footprint[i];
+            centre /= n;
             for (int i = 0; i < n; i++)
             {
                 Vector2 p0 = footprint[i];
@@ -131,9 +160,10 @@ namespace SanMonica.Utils
                 int i1 = AddVertex(b, nrm, new Vector2(u + segLen, 0f) * uvScale);
                 int i2 = AddVertex(c, nrm, new Vector2(u + segLen, height) * uvScale);
                 int i3 = AddVertex(d, nrm, new Vector2(u, height) * uvScale);
-                var t = Tris(wallSub);
-                t.Add(i0); t.Add(i1); t.Add(i2);
-                t.Add(i0); t.Add(i2); t.Add(i3);
+                Vector2 mid = (p0 + p1) * 0.5f - centre;
+                Vector3 outward = new Vector3(mid.x, 0f, mid.y);
+                if (outward.sqrMagnitude < 1e-6f) outward = nrm;
+                AddQuadFacing(i0, i1, i2, i3, outward, wallSub);
                 u += segLen;
             }
 
@@ -143,7 +173,7 @@ namespace SanMonica.Utils
             for (int i = 2; i < n; i++)
             {
                 int cur = AddVertex(new Vector3(footprint[i].x, topY, footprint[i].y), Vector3.up, footprint[i] * uvScale);
-                AddTriangle(c0, prev, cur, capSub);
+                AddTriangleFacing(c0, prev, cur, Vector3.up, capSub);
                 prev = cur;
             }
 
@@ -154,7 +184,7 @@ namespace SanMonica.Utils
                 for (int i = 2; i < n; i++)
                 {
                     int cur = AddVertex(new Vector3(footprint[i].x, baseY, footprint[i].y), Vector3.down, footprint[i] * uvScale);
-                    AddTriangle(b0, cur, bprev, capSub);
+                    AddTriangleFacing(b0, cur, bprev, Vector3.down, capSub);
                     bprev = cur;
                 }
             }
@@ -173,12 +203,12 @@ namespace SanMonica.Utils
                 AddVertex(p + Vector3.up * half, dir, new Vector2((float)i / segments * radius * 6f, height) * uvScale);
                 AddVertex(p - Vector3.up * half, dir, new Vector2((float)i / segments * radius * 6f, 0f) * uvScale);
             }
-            var t = Tris(sub);
             for (int i = 0; i < segments; i++)
             {
                 int a = baseIdx + i * 2;
-                t.Add(a); t.Add(a + 1); t.Add(a + 3);
-                t.Add(a); t.Add(a + 3); t.Add(a + 2);
+                Vector3 outward = _verts[a] - new Vector3(center.x, _verts[a].y, center.z);
+                AddTriangleFacing(a, a + 1, a + 3, outward, sub);
+                AddTriangleFacing(a, a + 3, a + 2, outward, sub);
             }
             if (caps)
             {
@@ -218,8 +248,9 @@ namespace SanMonica.Utils
             {
                 int a = baseIdx + y * stride + x;
                 int b = a + stride;
-                t.Add(a); t.Add(b); t.Add(a + 1);
-                t.Add(a + 1); t.Add(b); t.Add(b + 1);
+                Vector3 outward = _verts[a] - center;
+                AddTriangleFacing(a, b, a + 1, outward, sub);
+                AddTriangleFacing(a + 1, b, b + 1, outward, sub);
             }
         }
 
@@ -273,8 +304,8 @@ namespace SanMonica.Utils
             {
                 int a = baseIdx + z * stride + x;
                 int b = a + stride;
-                t.Add(a); t.Add(b); t.Add(a + 1);
-                t.Add(a + 1); t.Add(b); t.Add(b + 1);
+                AddTriangleFacing(a, b, a + 1, Vector3.up, sub);
+                AddTriangleFacing(a + 1, b, b + 1, Vector3.up, sub);
             }
         }
 

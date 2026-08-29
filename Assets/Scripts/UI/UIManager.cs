@@ -372,6 +372,10 @@ namespace SanMonica.UI
                 UIBuilder.Toggle(UIBuilder.Anchored("Toggle", touchRow, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-8f, 0f), new Vector2(320f, 44f)),
                     "Visible", Touch.Enabled, v => { Touch.Enabled = v; Touch.ApplyAppearance(); });
 
+                var debugRow = SettingsRow("Diagnostics");
+                UIBuilder.Toggle(UIBuilder.Anchored("Toggle", debugRow, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-8f, 0f), new Vector2(320f, 44f)),
+                    "Show", DebugOverlay.Visible, v => DebugOverlay.Visible = v);
+
                 var layoutRow = SettingsRow("Custom layout");
                 UIBuilder.Button(UIBuilder.Anchored("Edit", layoutRow, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-8f, 0f), new Vector2(300f, 44f)),
                     Touch.EditMode ? "FINISH EDITING" : "MOVE BUTTONS",

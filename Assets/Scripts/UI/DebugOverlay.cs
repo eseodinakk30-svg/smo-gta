@@ -5,18 +5,22 @@ namespace SanMonica.UI
 {
     /// <summary>
     /// On-screen readout of the things that decide whether the player has a
-    /// floor. Two rounds of diagnosing "no floor at spawn" by reading the source
-    /// were wrong, and the world generator was proven correct offline, so this
-    /// reports what the running game actually sees on the device: whether the
-    /// tile under the player carries a collider, what a downward ray hits, and
-    /// where the player is relative to the terrain.
+    /// floor: whether the tile under the player carries a collider, what a
+    /// downward ray hits and its layer, and where the player is relative to the
+    /// terrain. It is what found the inside-out ground, when two rounds of
+    /// reading the source had produced the wrong answer, so it stays - switched
+    /// off, one toggle away in the settings screen.
     ///
     /// IMGUI on purpose - it does not depend on the game's own UI, so it still
     /// draws if that is the part that is broken.
     /// </summary>
     public class DebugOverlay : MonoBehaviour
     {
-        public static bool Visible = true;
+        /// <summary>
+        /// Off by default - it is a diagnostic tool, not part of the game. The
+        /// settings screen turns it back on when something needs looking at.
+        /// </summary>
+        public static bool Visible;
 
         private GUIStyle _style;
         private string _text = "";

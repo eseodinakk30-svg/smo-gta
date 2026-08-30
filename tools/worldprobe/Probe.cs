@@ -228,6 +228,21 @@ internal static class Probe
                                   (hit == float.NegativeInfinity ? "nothing" : $"{hit:0.0} m") +
                                   (faceY > 0f ? "" : " (down-facing)"));
         }
+        // Traffic, parked cars and pedestrians are all placed through LanePoint
+        // and SidewalkPoint. If those still read the height field, a car spawned
+        // on the bridge appears at the bottom of the bay.
+        int lanesOnDeck = 0;
+        foreach (int i in bridges)
+        {
+            var seg = roads.Segments[i];
+            Vector3 lane = roads.LanePoint(i, 0, true, 0.5f);
+            if (Mathf.Abs(lane.y - seg.DeckAt(0.5f)) < 1.5f) lanesOnDeck++;
+            else Console.WriteLine($"  span {i}: lane point at {lane.y:0.0} m but the deck is at {seg.DeckAt(0.5f):0.0} m");
+        }
+        Console.WriteLine($"bridges: {lanesOnDeck}/{bridges.Count} put their traffic lanes on the deck");
+        if (lanesOnDeck < bridges.Count)
+            Fail($"{bridges.Count - lanesOnDeck} bridges place traffic below the deck");
+
         Console.WriteLine($"bridges: {dry}/{bridges.Count} clear the water, {drivable}/{bridges.Count} have a drivable deck");
         if (dry < bridges.Count) Fail($"{bridges.Count - dry} bridge decks sit at or under the waterline");
         if (drivable < bridges.Count) Fail($"{bridges.Count - drivable} bridges have no surface to drive on");

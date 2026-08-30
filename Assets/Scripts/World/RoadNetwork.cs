@@ -603,15 +603,25 @@ namespace SanMonica.World
         }
 
         /// <summary>Centre of a driving lane. Lane 0 is the innermost lane of that direction.</summary>
+        /// <summary>
+        /// Height of the road surface at a point on a segment. Everything that
+        /// places something on a road - traffic, parked cars, pedestrians, the
+        /// spawn point - must ask for this rather than the height field, or on a
+        /// bridge it gets the bed of the bay instead of the deck overhead.
+        /// </summary>
+        private float SurfaceHeight(in RoadSegment s, float t, Vector2 at)
+            => s.IsBridge ? s.DeckAt(t) : _map.SampleHeight(at.x, at.y);
+
         public Vector3 LanePoint(int segIndex, int lane, bool forward, float t)
         {
             var s = Segments[segIndex];
-            Vector2 flat = forward ? s.Point(t) : s.Point(1f - t);
+            float u = forward ? t : 1f - t;
+            Vector2 flat = s.Point(u);
             float offset = (lane + 0.5f) * _cfg.laneWidth;
             if (s.OneWay) offset -= s.LanesPerDirection * _cfg.laneWidth * 0.5f;
             Vector2 right = s.Right * (forward ? 1f : -1f);
             Vector2 pos = flat + right * offset;
-            return new Vector3(pos.x, _map.SampleHeight(pos.x, pos.y) + 0.05f, pos.y);
+            return new Vector3(pos.x, SurfaceHeight(s, u, pos) + 0.05f, pos.y);
         }
 
         public Vector3 SidewalkPoint(int segIndex, bool leftSide, float t)
@@ -620,7 +630,7 @@ namespace SanMonica.World
             Vector2 flat = s.Point(t);
             float offset = s.HalfWidth + _cfg.sidewalkWidth * 0.5f;
             Vector2 pos = flat + s.Right * (leftSide ? -offset : offset);
-            return new Vector3(pos.x, _map.SampleHeight(pos.x, pos.y) + 0.16f, pos.y);
+            return new Vector3(pos.x, SurfaceHeight(s, t, pos) + 0.16f, pos.y);
         }
 
         public float SegmentSpeedLimit(int segIndex)

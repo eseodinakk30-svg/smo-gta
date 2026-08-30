@@ -78,7 +78,11 @@ namespace SanMonica.Vehicles
             float lowerH = bodyH - cabinH;
 
             Color trim = new Color(0.10f, 0.10f, 0.12f);
-            Color glass = new Color(0.16f, 0.22f, 0.28f);
+            // glassTint was catalogue data nothing read, so every windscreen in
+            // the city was the same shade. Limousines and luxury saloons ask for
+            // dark glass; a compact does not get it for free.
+            float tint = Mathf.Clamp01(def.glassTint);
+            Color glass = Color.Lerp(new Color(0.34f, 0.44f, 0.52f), new Color(0.05f, 0.07f, 0.10f), tint);
             Color chrome = new Color(0.78f, 0.80f, 0.84f);
 
             float baseY = ride + lowerH * 0.5f;
@@ -91,20 +95,40 @@ namespace SanMonica.Vehicles
                 Taper(mb, SubGlossy, paint, new Vector3(0f, ride + lowerH * 0.92f, L * 0.32f),
                     new Vector3(W * 0.96f, lowerH * 0.42f, L * 0.34f), 0.88f, 0.6f, Quaternion.Euler(-def.noseSlope * 34f, 0f, 0f));
 
-            // Cabin.
+            // Cabin. A convertible has no roof and no side glazing: a low
+            // windscreen, a rollover bar and an interior you can see into.
             float cabinZ = def.hasBed ? -L * 0.08f : (def.hasCargoBox ? L * 0.24f : -L * 0.02f);
-            Taper(mb, SubGlossy, paint, new Vector3(0f, ride + lowerH + cabinH * 0.5f, cabinZ),
-                new Vector3(W * 0.94f, cabinH, cabinL), def.roofTaper, 0.86f, Quaternion.identity);
-
-            // Glass: windscreen, rear window and side glazing.
             float glassInset = 0.03f;
-            Taper(mb, SubGlass, glass, new Vector3(0f, ride + lowerH + cabinH * 0.52f, cabinZ + cabinL * 0.5f - glassInset),
-                new Vector3(W * 0.86f, cabinH * 0.78f, 0.06f), def.roofTaper, 1f, Quaternion.identity);
-            Taper(mb, SubGlass, glass, new Vector3(0f, ride + lowerH + cabinH * 0.52f, cabinZ - cabinL * 0.5f + glassInset),
-                new Vector3(W * 0.84f, cabinH * 0.72f, 0.06f), def.roofTaper, 1f, Quaternion.identity);
-            for (int side = -1; side <= 1; side += 2)
-                Taper(mb, SubGlass, glass, new Vector3(side * W * 0.455f, ride + lowerH + cabinH * 0.55f, cabinZ),
-                    new Vector3(0.05f, cabinH * 0.66f, cabinL * 0.86f), 1f, def.roofTaper, Quaternion.identity);
+
+            if (def.convertible)
+            {
+                // Waistline instead of a roof, so the body still reads as a car.
+                Taper(mb, SubGlossy, paint, new Vector3(0f, ride + lowerH + cabinH * 0.18f, cabinZ),
+                    new Vector3(W * 0.94f, cabinH * 0.36f, cabinL), 0.98f, 0.9f, Quaternion.identity);
+                // Raked windscreen.
+                Taper(mb, SubGlass, glass, new Vector3(0f, ride + lowerH + cabinH * 0.46f, cabinZ + cabinL * 0.46f),
+                    new Vector3(W * 0.82f, cabinH * 0.62f, 0.05f), 0.88f, 1f, Quaternion.Euler(-24f, 0f, 0f));
+                // Seat backs and a rollover hoop.
+                Box(mb, SubMatte, trim, new Vector3(0f, ride + lowerH + cabinH * 0.42f, cabinZ - cabinL * 0.26f),
+                    new Vector3(W * 0.66f, cabinH * 0.44f, 0.10f), Quaternion.identity);
+                Box(mb, SubMetal, new Color(0.62f, 0.63f, 0.66f),
+                    new Vector3(0f, ride + lowerH + cabinH * 0.60f, cabinZ - cabinL * 0.34f),
+                    new Vector3(W * 0.60f, cabinH * 0.30f, 0.07f), Quaternion.identity);
+            }
+            else
+            {
+                Taper(mb, SubGlossy, paint, new Vector3(0f, ride + lowerH + cabinH * 0.5f, cabinZ),
+                    new Vector3(W * 0.94f, cabinH, cabinL), def.roofTaper, 0.86f, Quaternion.identity);
+
+                // Glass: windscreen, rear window and side glazing.
+                Taper(mb, SubGlass, glass, new Vector3(0f, ride + lowerH + cabinH * 0.52f, cabinZ + cabinL * 0.5f - glassInset),
+                    new Vector3(W * 0.86f, cabinH * 0.78f, 0.06f), def.roofTaper, 1f, Quaternion.identity);
+                Taper(mb, SubGlass, glass, new Vector3(0f, ride + lowerH + cabinH * 0.52f, cabinZ - cabinL * 0.5f + glassInset),
+                    new Vector3(W * 0.84f, cabinH * 0.72f, 0.06f), def.roofTaper, 1f, Quaternion.identity);
+                for (int side = -1; side <= 1; side += 2)
+                    Taper(mb, SubGlass, glass, new Vector3(side * W * 0.455f, ride + lowerH + cabinH * 0.55f, cabinZ),
+                        new Vector3(0.05f, cabinH * 0.66f, cabinL * 0.86f), 1f, def.roofTaper, Quaternion.identity);
+            }
 
             // Pickup bed / cargo box.
             if (def.hasBed)

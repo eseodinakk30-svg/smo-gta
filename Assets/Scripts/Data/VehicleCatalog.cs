@@ -87,6 +87,15 @@ namespace SanMonica.Data
             v.preferredDistricts = new[] { DistrictType.Wealthy, DistrictType.Downtown, DistrictType.Marina, DistrictType.Beach };
             _all.Add(v);
 
+            v = V("solano-spider", "Solano Spider", "Vireo Motors", VehicleClass.Sports);
+            v.length = 4.36f; v.width = 1.92f; v.height = 1.16f; v.mass = 1340f; v.enginePower = 330f;
+            v.topSpeedKph = 268f; v.price = 142000; v.spawnWeight = 0.35f; v.grip = 1.18f; v.seats = 2;
+            v.cabinLengthRatio = 0.36f; v.noseSlope = 0.26f; v.roofTaper = 0.62f; v.rideHeight = 0.18f;
+            v.convertible = true; v.glassTint = 0.15f; v.gearCount = 7;
+            v.paintOptions = LoudPaints; v.turboWhistle = 0.45f; v.engineBaseHz = 53f;
+            v.preferredDistricts = new[] { DistrictType.Wealthy, DistrictType.Marina, DistrictType.Beach };
+            _all.Add(v);
+
             v = V("tessarae", "Tessarae", "Falcorne", VehicleClass.Super);
             v.length = 4.55f; v.width = 2.02f; v.height = 1.14f; v.mass = 1350f; v.enginePower = 545f;
             v.topSpeedKph = 336f; v.price = 890000; v.spawnWeight = 0.10f; v.grip = 1.42f; v.seats = 2;
@@ -107,7 +116,7 @@ namespace SanMonica.Data
             v = V("brawler", "Brawler 440", "Steadman", VehicleClass.Muscle);
             v.length = 5.02f; v.width = 1.98f; v.height = 1.36f; v.mass = 1720f; v.enginePower = 330f;
             v.topSpeedKph = 246f; v.price = 54000; v.spawnWeight = 1.2f; v.grip = 0.94f; v.seats = 2;
-            v.cabinLengthRatio = 0.42f; v.engineBaseHz = 42f; v.engineHarshness = 0.72f;
+            v.cabinLengthRatio = 0.42f; v.engineBaseHz = 42f; v.engineHarshness = 0.72f; v.gearCount = 4;
             v.preferredDistricts = new[] { DistrictType.Residential, DistrictType.Suburb, DistrictType.Badlands };
             _all.Add(v);
 

@@ -226,7 +226,12 @@ namespace SanMonica.UI
                 else if (_promptTimer <= 0f) _promptLabel.text = "";
 
                 if (player.InVehicle && player.CurrentVehicle != null)
-                    _speedLabel.text = Mathf.RoundToInt(player.CurrentVehicle.AbsSpeedKph) + " km/h";
+                {
+                    var driven = player.CurrentVehicle;
+                    string gear = driven.Gear < 0 ? "" :
+                        (driven.Gear == 0 ? "   R" : "   " + driven.Gear + "/" + driven.GearCount);
+                    _speedLabel.text = Mathf.RoundToInt(driven.AbsSpeedKph) + " km/h" + gear;
+                }
                 else _speedLabel.text = "";
             }
 

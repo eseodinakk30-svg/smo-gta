@@ -64,6 +64,17 @@ namespace SanMonica.Vehicles
 
             float distanceFade = 1f;
             float volume = running ? Mathf.Lerp(0.18f, 0.62f, rpm) * distanceFade : 0f;
+
+            // Turbocharged cars whine on top of the engine as the revs come up.
+            // turboWhistle had been catalogue data nothing ever read.
+            float turbo = _vehicle.Definition != null ? _vehicle.Definition.turboWhistle : 0f;
+            if (running && turbo > 0.01f)
+            {
+                float spool = Mathf.Clamp01((rpm - 0.42f) / 0.5f) * Mathf.Clamp01(_vehicle.Throttle + 0.15f);
+                _engine.pitch += turbo * spool * 0.55f;
+                volume *= 1f + turbo * spool * 0.35f;
+            }
+
             _engine.volume = Mathf.Lerp(_engine.volume, volume, Time.deltaTime * 6f);
 
             if (_tyres != null)

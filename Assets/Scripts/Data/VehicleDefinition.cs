@@ -76,7 +76,6 @@ namespace SanMonica.Data
 
         [Header("Seats & doors")]
         public int seats = 4;
-        public bool hasDoors = true;
         public bool convertible = false;
 
         [Header("Look")]

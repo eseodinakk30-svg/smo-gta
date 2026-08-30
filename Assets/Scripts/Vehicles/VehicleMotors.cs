@@ -12,6 +12,16 @@ namespace SanMonica.Vehicles
         protected VehicleDefinition Def;
 
         public float EngineRpmNormalised { get; protected set; }
+        /// <summary>0 is reverse, 1..GearCount are the forward gears, -1 = no gearbox.</summary>
+        public int Gear { get; protected set; } = -1;
+        public int GearCount { get; protected set; }
+
+        /// <summary>Back to a standstill: pooled vehicles must not come back in top gear.</summary>
+        public virtual void ResetDrivetrain()
+        {
+            EngineRpmNormalised = 0f;
+            if (GearCount > 0) Gear = 1;
+        }
         public virtual bool IsGrounded => true;
         public virtual float SlipAmount => 0f;
 
@@ -43,6 +53,14 @@ namespace SanMonica.Vehicles
         private float _grounded;
         private float _slip;
         private float _engineRpm;
+        private float _shiftTimer;
+
+        public override void ResetDrivetrain()
+        {
+            base.ResetDrivetrain();
+            _engineRpm = 0f;
+            _shiftTimer = 0f;
+        }
 
         public override bool IsGrounded => _grounded > 0.4f;
         public override float SlipAmount => _slip;
@@ -50,8 +68,23 @@ namespace SanMonica.Vehicles
         public override void Bind(Vehicle vehicle)
         {
             base.Bind(vehicle);
+            GearCount = Mathf.Clamp(Def != null ? Def.gearCount : 5, 1, 10);
+            Gear = 1;
             BuildWheels();
         }
+
+        /// <summary>
+        /// Road speed at which a gear runs out of revs. Progressive, the way a
+        /// real box is: first is short, top is long. gearCount had been sitting
+        /// in the catalogue since the beginning with nothing reading it, so
+        /// every car pulled from a standstill to its top speed on one endless
+        /// ratio and sounded like it too.
+        /// </summary>
+        private float GearCeiling(int gear, float topSpeed)
+            => topSpeed * Mathf.Lerp(0.22f, 1f, Mathf.Pow(Mathf.Clamp01((float)gear / GearCount), 1.35f));
+
+        private float GearFloor(int gear, float topSpeed)
+            => gear <= 1 ? 0f : GearCeiling(gear - 1, topSpeed);
 
         private void BuildWheels()
         {
@@ -117,13 +150,45 @@ namespace SanMonica.Vehicles
 
             // Reverse when braking from a standstill.
             bool reversing = speed < 0.5f && brake > 0.1f && throttle < 0.05f;
+
+            // ---- gearbox ----
+            _shiftTimer = Mathf.Max(0f, _shiftTimer - Time.fixedDeltaTime);
+            float gearRpm;
+            if (reversing)
+            {
+                Gear = 0;
+                gearRpm = Mathf.Clamp01(absSpeed / Mathf.Max(1f, topSpeed * 0.28f));
+            }
+            else
+            {
+                if (Gear < 1) { Gear = 1; _shiftTimer = 0.25f; }
+                float ceiling = GearCeiling(Gear, topSpeed);
+                float floor = GearFloor(Gear, topSpeed);
+                gearRpm = Mathf.Clamp01(Mathf.InverseLerp(floor, Mathf.Max(floor + 0.5f, ceiling), absSpeed));
+
+                if (_shiftTimer <= 0f)
+                {
+                    if (gearRpm > 0.94f && Gear < GearCount) { Gear++; _shiftTimer = 0.28f; }
+                    else if (gearRpm < 0.24f && Gear > 1) { Gear--; _shiftTimer = 0.20f; }
+                }
+                // Idle revs so a stopped engine is not silent.
+                gearRpm = Mathf.Max(gearRpm, throttle * 0.35f + 0.12f);
+            }
+
             float driveTorque = 0f;
             if (reversing) driveTorque = -MaxForce * 0.45f * brake * Def.wheelRadius;
             else if (throttle > 0.01f)
             {
-                float curve = 1f - Mathf.Clamp01(absSpeed / Mathf.Max(1f, topSpeed));
-                curve = Mathf.Max(0.08f, curve * curve * 0.7f + curve * 0.4f);
-                driveTorque = MaxForce * throttle * curve * Def.acceleration * Def.wheelRadius;
+                // Short gears multiply torque; the power band peaks high in the
+                // rev range; the limiter still holds the catalogue top speed.
+                float ratio = GearCount > 1 ? (Gear - 1) / (float)(GearCount - 1) : 0f;
+                float gearTorque = Mathf.Lerp(1.85f, 0.72f, ratio);
+                float band = Mathf.Clamp01(1.12f - Mathf.Abs(gearRpm - 0.74f) * 0.95f);
+                float limiter = 1f - Mathf.Clamp01(absSpeed / Mathf.Max(1f, topSpeed));
+                limiter = Mathf.Max(0.05f, limiter * limiter * 0.65f + limiter * 0.45f);
+                float clutch = _shiftTimer > 0f ? 0.18f : 1f;
+                driveTorque = MaxForce * throttle * gearTorque * band * limiter * clutch
+                              * Def.acceleration * Def.wheelRadius;
             }
 
             float brakeTorque = 0f;
@@ -212,7 +277,10 @@ namespace SanMonica.Vehicles
             if (absSpeed > topSpeed)
                 Body.velocity = Vector3.ClampMagnitude(Body.velocity, topSpeed);
 
-            _engineRpm = Mathf.Lerp(_engineRpm, Mathf.Clamp01(absSpeed / Mathf.Max(1f, topSpeed)) * 0.75f + throttle * 0.35f, Time.fixedDeltaTime * 4f);
+            // The engine note follows the gear, so it climbs and drops instead of
+            // being one long swell from the kerb to the top speed.
+            float targetRpm = _shiftTimer > 0f ? gearRpm * 0.72f : gearRpm;
+            _engineRpm = Mathf.Lerp(_engineRpm, targetRpm, Time.fixedDeltaTime * 9f);
             EngineRpmNormalised = Mathf.Clamp01(_engineRpm);
 
             if (throttle > 0.05f && V.Fuel > 0f) V.Fuel = Mathf.Max(0f, V.Fuel - throttle * Time.fixedDeltaTime * 0.0035f * (Def.mass / 1400f));

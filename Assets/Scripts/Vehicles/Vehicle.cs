@@ -45,6 +45,9 @@ namespace SanMonica.Vehicles
         public float SteerInput { get; private set; }
         public bool HandbrakeInput { get; private set; }
         public float EngineRpmNormalised => Motor != null ? Motor.EngineRpmNormalised : 0f;
+        /// <summary>0 is reverse, 1..GearCount forward, -1 when there is no gearbox.</summary>
+        public int Gear => Motor != null ? Motor.Gear : -1;
+        public int GearCount => Motor != null ? Motor.GearCount : 0;
 
         private readonly List<Transform> _seatAnchors = new List<Transform>(4);
         private readonly Dictionary<int, GameObject> _occupants = new Dictionary<int, GameObject>(4);
@@ -456,6 +459,7 @@ namespace SanMonica.Vehicles
             if (Definition != null) { Health = Definition.maxHealth; Fuel = Definition.fuelCapacity; }
             _damageSmoke = 0f;
             EngineRunning = true;
+            Motor?.ResetDrivetrain();
             _occupants.Clear();
             if (Body != null)
             {

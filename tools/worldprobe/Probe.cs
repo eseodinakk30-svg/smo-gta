@@ -598,7 +598,7 @@ internal static class Probe
     {
         // ---- vehicles ----
         var ids = new System.Collections.Generic.HashSet<string>();
-        int cars = 0, boats = 0, aircraft = 0, forSale = 0;
+        int cars = 0, boats = 0, aircraft = 0, forSale = 0, convertibles = 0;
         foreach (var v in db.vehicles)
         {
             if (string.IsNullOrEmpty(v.id)) { Fail("a vehicle has no id"); continue; }
@@ -608,12 +608,19 @@ internal static class Probe
             if (v.maxHealth <= 0f) Fail($"vehicle '{v.id}' starts destroyed");
             if (v.seats < 1) Fail($"vehicle '{v.id}' has nowhere to sit");
             if (v.IsGroundCar && v.wheelCount < 2) Fail($"car '{v.id}' has {v.wheelCount} wheels");
+            if (v.IsGroundCar && (v.gearCount < 1 || v.gearCount > 10))
+                Fail($"car '{v.id}' has a {v.gearCount}-speed gearbox");
+            if (v.turboWhistle < 0f || v.turboWhistle > 1f) Fail($"vehicle '{v.id}' has an out-of-range turbo whistle");
+            if (v.glassTint < 0f || v.glassTint > 1f) Fail($"vehicle '{v.id}' has an out-of-range glass tint");
+            if (v.convertible) convertibles++;
             if (v.IsGroundCar) cars++;
             if (v.IsWatercraft) boats++;
             if (v.IsAircraft) aircraft++;
             if (v.price > 0 && !v.IsEmergency) forSale++;
         }
-        Console.WriteLine($"vehicles: {db.vehicles.Count} total, {cars} cars, {boats} boats, {aircraft} aircraft, {forSale} sellable");
+        Console.WriteLine($"vehicles: {db.vehicles.Count} total, {cars} cars, {boats} boats, {aircraft} aircraft, " +
+                          $"{convertibles} convertible, {forSale} sellable");
+        if (convertibles == 0) Fail("no convertible exists - the roof-down body is unreachable");
         if (cars == 0) Fail("no drivable car exists");
         if (boats == 0) Fail("no boat exists - the bay is decoration");
         if (aircraft == 0) Fail("no aircraft exists");

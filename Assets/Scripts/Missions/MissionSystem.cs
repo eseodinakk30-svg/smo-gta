@@ -166,7 +166,30 @@ namespace SanMonica.Missions
                     return v;
                 }
             }
-            return new Vector3(p.x, map.SampleHeight(p.x, p.y), p.y);
+            return GroundLandmark(p);
+        }
+
+        /// <summary>
+        /// District centres are fixed points on the map, and three of them -
+        /// downtown, the port and the marina - happen to land in the water; the
+        /// port is twenty-six metres under. An objective marker dropped there
+        /// cannot be reached and the player is given no clue why, so a centre
+        /// that is not on usable ground is moved to the nearest pavement.
+        /// </summary>
+        private Vector3 GroundLandmark(Vector2 p)
+        {
+            var map = Services.Map;
+            float sea = Services.Config != null ? Services.Config.seaLevel : 0f;
+            float height = map != null ? map.SampleHeight(p.x, p.y) : 0f;
+            if (height > sea + 1f) return new Vector3(p.x, height, p.y);
+
+            var roads = Services.Roads;
+            if (roads != null)
+            {
+                int segment = roads.NearestSegment(p, 2000f);
+                if (segment >= 0) return roads.SidewalkPoint(segment, true, 0.5f);
+            }
+            return new Vector3(p.x, sea + 1f, p.y);
         }
 
         // ------------------------------------------------------------------

@@ -375,14 +375,47 @@ internal static class Probe
         nav.Initialize(roads, map);
         if (!nav.Ready) { Fail("the navigation graph is not ready after Initialize"); return; }
 
+        // Every landmark the story anchors its objectives to. A mission sent to a
+        // point in the sea, or with no road within reach, is a dead end for the
+        // player with no way to tell what went wrong.
         var places = new List<(string, Vector2)>
         {
             ("downtown", map.DowntownCenter),
             ("port", map.PortCenter),
-            ("airport", map.AirportCenter),
             ("marina", map.MarinaCenter),
+            ("airport", map.AirportCenter),
+            ("university", map.UniversityCenter),
+            ("crestwood", map.CrestwoodCenter),
+            ("foundry", map.FoundryCenter),
             ("marigold", map.MarigoldCenter),
+            ("park", map.ParkCenter),
         };
+
+        int moved = 0;
+        for (int i = 0; i < places.Count; i++)
+        {
+            var (name, flat) = places[i];
+            // Mirrors MissionSystem.GroundLandmark: a centre in the water is
+            // resolved to the nearest pavement before a marker is placed.
+            float h = map.SampleHeight(flat.x, flat.y);
+            Vector3 resolved;
+            if (h > cfg.seaLevel + 1f) resolved = new Vector3(flat.x, h, flat.y);
+            else
+            {
+                int seg = roads.NearestSegment(flat, 2000f);
+                if (seg < 0) { Fail($"landmark '{name}' is in the water and has no road within 2 km"); continue; }
+                resolved = roads.SidewalkPoint(seg, true, 0.5f);
+                moved++;
+            }
+
+            float rh = map.SampleHeight(resolved.x, resolved.z);
+            if (rh <= cfg.seaLevel + 0.5f)
+                Fail($"landmark '{name}' still resolves into the water at {rh:0.0} m");
+            if (roads.NearestSegment(new Vector2(resolved.x, resolved.z), 260f) < 0)
+                Fail($"landmark '{name}' resolves with no road within 260 m - missions there are unreachable");
+            places[i] = (name, new Vector2(resolved.x, resolved.z));
+        }
+        Console.WriteLine($"landmarks: {places.Count} story anchors checked, {moved} moved out of the water onto a road");
 
         var path = new List<Vector3>();
         int tried = 0, found = 0;

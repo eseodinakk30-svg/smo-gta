@@ -16,6 +16,10 @@ namespace SanMonica.Characters
         public DamageKind Kind;
         public BodyPart Part;
         public float ArmourPiercing;
+        /// <summary>Weapon's own headshot multiplier. 0 leaves the default in place.</summary>
+        public float HeadMultiplier;
+        /// <summary>Weapon's own arm/leg multiplier. 0 leaves the default in place.</summary>
+        public float LimbMultiplier;
 
         public static DamageInfo Simple(float amount, DamageKind kind, GameObject source, Vector3 point, Vector3 dir, float force = 0f)
         {

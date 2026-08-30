@@ -189,6 +189,7 @@ internal static class Probe
         CheckRoadNetwork(cfg, map, roads);
         CheckBridges(cfg, map, roads, builder, geo);
         CheckCityContent(cfg, map, roads, layout);
+        CheckCombatData(db);
         CheckNavigation(cfg, map, roads, layout);
 
         Console.WriteLine(_failures == 0
@@ -500,6 +501,89 @@ internal static class Probe
         Console.WriteLine($"shops: {farFromRoad} more than 220 m from any road, {sunk} below the terrain");
         if (farFromRoad > shops / 10) Fail($"{farFromRoad} of {shops} shops are unreachable by road");
         if (sunk > 0) Fail($"{sunk} shops are buried under the terrain");
+    }
+
+    /// <summary>
+    /// The weapon and NPC tables the whole combat system reads. None of this
+    /// needs Unity to run, so a typo in a loadout or a gun with no ammunition
+    /// fails the build here instead of being discovered in a firefight.
+    /// </summary>
+    private static void CheckCombatData(GameDatabase db)
+    {
+        var ids = new System.Collections.Generic.HashSet<string>();
+        int guns = 0, suppressed = 0, burst = 0, penetrating = 0;
+
+        foreach (var w in db.weapons)
+        {
+            if (string.IsNullOrEmpty(w.id)) { Fail("a weapon has no id"); continue; }
+            if (!ids.Add(w.id)) Fail($"weapon id '{w.id}' is used twice");
+
+            if (w.noiseRadius <= 0f) Fail($"weapon '{w.id}' makes no noise at all");
+            if (w.penetration < 0) Fail($"weapon '{w.id}' has negative penetration - ApplyDerivedStats did not run");
+            if (w.penetration > 0) penetrating++;
+            if (w.suppressed) suppressed++;
+
+            if (w.IsBurst)
+            {
+                burst++;
+                if (w.automatic) Fail($"weapon '{w.id}' is both burst and fully automatic");
+                if (w.burstInterval <= 0f) Fail($"burst weapon '{w.id}' has no pause between bursts");
+            }
+
+            if (w.IsGun)
+            {
+                guns++;
+                if (w.range <= 1f) Fail($"gun '{w.id}' has no range");
+                if (w.roundsPerMinute <= 0f) Fail($"gun '{w.id}' has no rate of fire");
+                if (w.magazineSize <= 0) Fail($"gun '{w.id}' has no magazine");
+                if (w.maxReserve < w.magazineSize)
+                    Fail($"gun '{w.id}' cannot carry a single spare magazine ({w.maxReserve} < {w.magazineSize})");
+                if (w.explosionRadius <= 0f && w.damage <= 0f)
+                    Fail($"gun '{w.id}' does no damage and has no explosion");
+
+                // Falloff must start at full damage and never rise with distance.
+                float previous = w.DamageAtRange(0f);
+                if (Mathf.Abs(previous - w.damage) > 0.001f)
+                    Fail($"gun '{w.id}' does not do its listed damage at point blank");
+                for (int step = 1; step <= 12; step++)
+                {
+                    float d = w.DamageAtRange(w.range * step / 12f);
+                    if (d > previous + 0.001f) Fail($"gun '{w.id}' does more damage further away");
+                    previous = d;
+                }
+                if (previous > w.damage + 0.001f) Fail($"gun '{w.id}' gains damage at maximum range");
+            }
+            else if (w.category == WeaponCategory.Thrown)
+            {
+                if (w.explosionRadius <= 0f || w.explosionDamage <= 0f)
+                    Fail($"thrown weapon '{w.id}' does nothing when it lands");
+            }
+            else if (w.meleeReach <= 0f) Fail($"melee weapon '{w.id}' cannot reach anything");
+        }
+
+        Console.WriteLine($"weapons: {db.weapons.Count} total, {guns} guns, {burst} burst, " +
+                          $"{penetrating} penetrating, {suppressed} suppressed");
+        if (suppressed == 0) Fail("no suppressed weapon exists - the quiet approach is unbuyable");
+
+        // Every loadout an NPC can roll has to resolve, or an armed archetype
+        // spawns holding nothing and stands in a gunfight punching the air.
+        int armed = 0, references = 0;
+        foreach (var ped in db.peds)
+        {
+            bool canBeArmed = ped.armedChance > 0f;
+            bool hasList = ped.possibleWeapons != null && ped.possibleWeapons.Length > 0;
+            if (canBeArmed && !hasList) Fail($"ped '{ped.id}' can be armed but has no weapon list");
+            if (!hasList) continue;
+            if (canBeArmed) armed++;
+
+            foreach (var id in ped.possibleWeapons)
+            {
+                references++;
+                if (db.Weapon(id) == null) Fail($"ped '{ped.id}' can carry '{id}', which is not in the catalogue");
+            }
+        }
+        Console.WriteLine($"peds: {db.peds.Count} archetypes, {armed} can be armed, {references} loadout entries");
+        if (armed == 0) Fail("no archetype can ever be armed");
     }
 
     /// <summary>Downward ray against every triangle in the geometry, Moller-Trumbore.</summary>

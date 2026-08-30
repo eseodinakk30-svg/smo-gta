@@ -34,7 +34,13 @@ namespace SanMonica.Characters
             {
                 if (Bodies[i] == null) continue;
                 Bodies[i].isKinematic = kinematic;
-                Bodies[i].detectCollisions = !kinematic;
+                // Collision detection stays on. While the character is alive the
+                // hit boxes sit on the ragdoll layer, and the collision matrix
+                // already excludes that layer from every other one, so leaving
+                // this alone changes nothing about what they push - but it takes
+                // away any chance of the bones dropping out of the physics scene,
+                // and those bones are the only way a bullet can find a head.
+                Bodies[i].detectCollisions = true;
                 if (!kinematic) Bodies[i].WakeUp();
             }
         }

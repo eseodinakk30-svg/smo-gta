@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using SanMonica.Core;
 
@@ -8,7 +7,8 @@ namespace SanMonica.AI
     /// Sight and hearing for NPCs. Vision is a cone with line-of-sight checks
     /// throttled by the AI level of detail; hearing is event driven off the
     /// global noise bus, so a gunshot in an alley is heard by exactly the NPCs
-    /// that should hear it.
+    /// that should hear it. Threats are tracked generically - a cartel gunman
+    /// watches the police, not only the player.
     /// </summary>
     public class AIPerception : MonoBehaviour
     {
@@ -30,9 +30,15 @@ namespace SanMonica.AI
         public float TimeSinceHeard { get; private set; } = 999f;
         public GameObject CurrentThreat { get; private set; }
 
+        /// <summary>
+        /// How pinned down this NPC feels: raised by taking fire and by gunshots
+        /// going off next to them, and it bleeds away when the shooting stops.
+        /// Combat reads it to decide who keeps their nerve.
+        /// </summary>
+        public float Suppression { get; private set; }
+
         private float _scanTimer;
         private float _scanInterval = 0.25f;
-        private static readonly Collider[] Buffer = new Collider[16];
 
         public void SetLod(int lod)
         {
@@ -50,6 +56,22 @@ namespace SanMonica.AI
             GameEvents.NoiseMade -= OnNoise;
         }
 
+        public void ResetAwareness()
+        {
+            CanSeePlayer = false;
+            CurrentThreat = null;
+            Suppression = 0f;
+            TimeSincePlayerSeen = 999f;
+            TimeSinceHeard = 999f;
+        }
+
+        /// <summary>Being shot at, or shot near, rattles an NPC.</summary>
+        public void Suppress(float amount)
+        {
+            Suppression = Mathf.Clamp01(Suppression + amount);
+            Alertness = Mathf.Min(1f, Alertness + amount * 0.5f);
+        }
+
         private void OnNoise(NoiseEvent e)
         {
             if (e.Source == gameObject) return;
@@ -57,7 +79,13 @@ namespace SanMonica.AI
             if (distance > e.Loudness) return;
             LastHeardPosition = e.Position;
             TimeSinceHeard = 0f;
-            if (e.IsGunshot) Alertness = Mathf.Min(1f, Alertness + 0.4f);
+            if (e.IsGunshot)
+            {
+                Alertness = Mathf.Min(1f, Alertness + 0.4f);
+                // A shot twenty metres away is frightening; the same shot four
+                // streets away is only information.
+                Suppress(Mathf.Clamp01(1f - distance / 25f) * 0.35f);
+            }
         }
 
         private void Update()
@@ -65,6 +93,7 @@ namespace SanMonica.AI
             float dt = Time.deltaTime;
             TimeSincePlayerSeen += dt;
             TimeSinceHeard += dt;
+            Suppression = Mathf.MoveTowards(Suppression, 0f, dt * 0.3f);
 
             _scanTimer -= dt;
             if (_scanTimer > 0f) return;
@@ -113,22 +142,41 @@ namespace SanMonica.AI
             return CanSee(target.position + Vector3.up * 1.1f, out distance);
         }
 
-        /// <summary>Finds the closest hostile character within the view cone.</summary>
+        /// <summary>
+        /// Finds the closest visible hostile. It walks the live pedestrian
+        /// registry rather than firing an overlap sphere and then climbing the
+        /// hierarchy of every collider it touched: the registry already knows
+        /// each NPC's faction and health, so this costs a distance check per
+        /// neighbour instead of a physics query plus a GetComponentInParent.
+        /// </summary>
         public SanMonica.Characters.CharacterHealth FindHostile(SanMonica.Data.Faction myFaction, float radius)
         {
-            int count = Physics.OverlapSphereNonAlloc(transform.position, radius, Buffer,
-                GameLayers.CharacterMask, QueryTriggerInteraction.Ignore);
             SanMonica.Characters.CharacterHealth best = null;
             float bestDistance = float.MaxValue;
-            for (int i = 0; i < count; i++)
+            float sqr = radius * radius;
+
+            var player = Services.Player;
+            if (player != null && player.Health != null && player.Health.IsAlive
+                && FactionRelations.IsHostileToPlayer(myFaction)
+                && (player.transform.position - transform.position).sqrMagnitude < sqr
+                && CanSee(player.transform, out float playerDistance))
             {
-                var other = Buffer[i].GetComponentInParent<SanMonica.Characters.CharacterHealth>();
-                if (other == null || !other.IsAlive || other.gameObject == gameObject) continue;
-                var brain = other.GetComponent<PedBrain>();
-                var faction = brain != null ? brain.Faction : SanMonica.Data.Faction.Player;
-                if (!FactionRelations.IsHostile(myFaction, faction)) continue;
-                if (!CanSee(other.transform, out float d)) continue;
-                if (d < bestDistance) { bestDistance = d; best = other; }
+                best = player.Health;
+                bestDistance = playerDistance;
+            }
+
+            var peds = Services.Peds != null ? Services.Peds.ActivePeds : null;
+            if (peds == null) return best;
+
+            for (int i = 0; i < peds.Count; i++)
+            {
+                var brain = peds[i];
+                if (brain == null || brain.gameObject == gameObject) continue;
+                if (brain.Health == null || !brain.Health.IsAlive) continue;
+                if ((brain.transform.position - transform.position).sqrMagnitude > sqr) continue;
+                if (!FactionRelations.IsHostile(myFaction, brain.Faction)) continue;
+                if (!CanSee(brain.transform, out float d)) continue;
+                if (d < bestDistance) { bestDistance = d; best = brain.Health; }
             }
             return best;
         }

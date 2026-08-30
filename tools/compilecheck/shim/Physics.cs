@@ -209,6 +209,8 @@ namespace UnityEngine
         public static bool CheckSphere(Vector3 position, float radius, int mask) => false;
         public static bool CheckSphere(Vector3 position, float radius, int mask, QueryTriggerInteraction q) => false;
         public static bool CheckCapsule(Vector3 start, Vector3 end, float radius, int mask, QueryTriggerInteraction q) => false;
+        public static int RaycastNonAlloc(Vector3 origin, Vector3 direction, RaycastHit[] results, float maxDistance, int mask, QueryTriggerInteraction q) => 0;
+        public static int RaycastNonAlloc(Ray ray, RaycastHit[] results, float maxDistance, int mask, QueryTriggerInteraction q) => 0;
         public static Collider[] OverlapSphere(Vector3 position, float radius) => new Collider[0];
         public static Collider[] OverlapSphere(Vector3 position, float radius, int mask) => new Collider[0];
         public static Collider[] OverlapSphere(Vector3 position, float radius, int mask, QueryTriggerInteraction q) => new Collider[0];

@@ -211,7 +211,7 @@ namespace SanMonica.Data
             p.spawnWeight = 0f; p.maxHealth = 150f; p.armour = 45f; p.bravery = 0.95f; p.aggression = 1f;
             p.alertness = 1f; p.walkSpeed = 1.5f; p.runSpeed = 4.6f; p.sprintSpeed = 6.2f;
             p.wearsUniform = true; p.wearsHat = true; p.wearsVest = true; p.armedChance = 1f;
-            p.possibleWeapons = new[] { "p9", "pump" };
+            p.possibleWeapons = new[] { "p9", "p9", "pump", "smg-9", "baton" };
             p.shirtColors = new[] { new Color(0.13f,0.17f,0.28f) };
             p.trouserColors = new[] { new Color(0.11f,0.14f,0.22f) };
             p.minCash = 0; p.maxCash = 0; p.activeFrom = 0; p.activeTo = 0;
@@ -221,7 +221,7 @@ namespace SanMonica.Data
             p.spawnWeight = 0f; p.maxHealth = 190f; p.armour = 120f; p.bravery = 1f; p.aggression = 1f;
             p.alertness = 1f; p.runSpeed = 4.4f; p.sprintSpeed = 5.8f; p.wearsUniform = true;
             p.wearsHat = true; p.wearsVest = true; p.armedChance = 1f;
-            p.possibleWeapons = new[] { "carbine", "auto-shotgun" };
+            p.possibleWeapons = new[] { "carbine", "burst-carbine", "auto-shotgun" };
             p.shirtColors = new[] { new Color(0.10f,0.11f,0.13f) };
             p.trouserColors = new[] { new Color(0.09f,0.10f,0.12f) };
             p.minBuild = 1.1f; p.maxBuild = 1.3f; p.activeFrom = 0; p.activeTo = 0;
@@ -237,7 +237,7 @@ namespace SanMonica.Data
             p = P("security", "Vanguard Guard", PedRole.Guard, Faction.VanguardSecurity);
             p.spawnWeight = 0.6f; p.maxHealth = 145f; p.armour = 60f; p.bravery = 0.85f; p.aggression = 0.7f;
             p.alertness = 0.9f; p.wearsUniform = true; p.wearsVest = true; p.armedChance = 0.85f;
-            p.possibleWeapons = new[] { "p9", "smg-9" };
+            p.possibleWeapons = new[] { "p9", "smg-9", "baton" };
             p.shirtColors = new[] { new Color(0.15f,0.16f,0.18f) };
             p.trouserColors = new[] { new Color(0.13f,0.14f,0.16f) };
             p.activeFrom = 0; p.activeTo = 0;
@@ -248,7 +248,7 @@ namespace SanMonica.Data
             p = P("serrano", "Serrano Soldier", PedRole.Gangster, Faction.SerranoCartel);
             p.spawnWeight = 0.8f; p.maxHealth = 130f; p.armour = 20f; p.bravery = 0.8f; p.aggression = 0.85f;
             p.alertness = 0.8f; p.armedChance = 0.75f; p.reportChance = 0f;
-            p.possibleWeapons = new[] { "p9", "machine-pistol", "smg-9", "machete" };
+            p.possibleWeapons = new[] { "p9", "machine-pistol", "smg-9", "machete", "sawn-off", "knife" };
             p.shirtColors = new[] { new Color(0.62f,0.12f,0.14f), new Color(0.10f,0.10f,0.12f) };
             p.minCash = 100; p.maxCash = 900; p.activeFrom = 0; p.activeTo = 0;
             p.preferredDistricts = new[] { DistrictType.Marigold, DistrictType.Industrial, DistrictType.Badlands };
@@ -257,7 +257,7 @@ namespace SanMonica.Data
             p = P("ironbay", "Iron Bay Enforcer", PedRole.Gangster, Faction.IronBaySyndicate);
             p.spawnWeight = 0.7f; p.maxHealth = 140f; p.armour = 35f; p.bravery = 0.85f; p.aggression = 0.8f;
             p.alertness = 0.85f; p.armedChance = 0.8f; p.reportChance = 0f;
-            p.possibleWeapons = new[] { "p9-heavy", "pump", "smg-heavy", "wrench" };
+            p.possibleWeapons = new[] { "p9-heavy", "pump", "smg-heavy", "wrench", "sawn-off" };
             p.shirtColors = new[] { new Color(0.14f,0.20f,0.26f), new Color(0.20f,0.22f,0.24f) };
             p.minBuild = 1.05f; p.maxBuild = 1.3f; p.minCash = 120; p.maxCash = 1100;
             p.activeFrom = 0; p.activeTo = 0;
@@ -267,7 +267,7 @@ namespace SanMonica.Data
             p = P("callenueve", "Calle Nueve Crew", PedRole.Gangster, Faction.CalleNueve);
             p.spawnWeight = 0.75f; p.maxHealth = 115f; p.bravery = 0.65f; p.aggression = 0.7f;
             p.alertness = 0.7f; p.armedChance = 0.55f; p.reportChance = 0f;
-            p.possibleWeapons = new[] { "p9", "bat", "machine-pistol" };
+            p.possibleWeapons = new[] { "p9", "bat", "machine-pistol", "knife" };
             p.shirtColors = new[] { new Color(0.16f,0.42f,0.62f), new Color(0.90f,0.90f,0.92f) };
             p.minCash = 40; p.maxCash = 500; p.activeFrom = 0; p.activeTo = 0;
             p.preferredDistricts = new[] { DistrictType.Residential, DistrictType.Marigold };
@@ -276,7 +276,7 @@ namespace SanMonica.Data
             p = P("mugger", "Mugger", PedRole.Criminal, Faction.Civilian);
             p.spawnWeight = 0.45f; p.maxHealth = 105f; p.bravery = 0.5f; p.aggression = 0.6f;
             p.armedChance = 0.4f; p.reportChance = 0f; p.activeFrom = 20; p.activeTo = 5;
-            p.possibleWeapons = new[] { "machete", "p9" };
+            p.possibleWeapons = new[] { "machete", "p9", "knife" };
             p.shirtColors = new[] { new Color(0.14f,0.14f,0.16f), new Color(0.24f,0.22f,0.20f) };
             p.minCash = 30; p.maxCash = 320;
             p.preferredDistricts = new[] { DistrictType.Marigold, DistrictType.Residential, DistrictType.Industrial, DistrictType.Park };
@@ -285,7 +285,7 @@ namespace SanMonica.Data
             p = P("halcyon", "Halcyon Operative", PedRole.Guard, Faction.HalcyonDynamics);
             p.spawnWeight = 0.2f; p.maxHealth = 160f; p.armour = 90f; p.bravery = 1f; p.aggression = 0.9f;
             p.alertness = 1f; p.armedChance = 1f; p.reportChance = 0f;
-            p.possibleWeapons = new[] { "carbine", "battle-rifle" };
+            p.possibleWeapons = new[] { "carbine", "battle-rifle", "dmr", "p9-suppressed" };
             p.shirtColors = new[] { new Color(0.16f,0.20f,0.24f) };
             p.trouserColors = new[] { new Color(0.14f,0.16f,0.20f) };
             p.wearsVest = true; p.minBuild = 1.05f; p.maxBuild = 1.25f;

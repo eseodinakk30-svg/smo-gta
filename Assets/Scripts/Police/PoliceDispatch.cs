@@ -35,6 +35,7 @@ namespace SanMonica.Police
         private readonly List<GameObject> _roadblocks = new List<GameObject>(4);
         private float _spawnTimer;
         private float _maintainTimer;
+        private float _footPursuitTimer;
 
         public int ActiveUnits => _units.Count;
         public int ActiveOfficers => _officers.Count;
@@ -239,6 +240,12 @@ namespace SanMonica.Police
                 else driver.ChaseTarget = player.transform;
             }
 
+            // Repathing every officer every frame ran a city-wide A* per officer
+            // per frame. Once a second is plenty for a foot pursuit.
+            _footPursuitTimer -= Time.deltaTime;
+            bool repath = _footPursuitTimer <= 0f;
+            if (repath) _footPursuitTimer = 1.1f;
+
             for (int i = 0; i < _officers.Count; i++)
             {
                 var officer = _officers[i];
@@ -249,9 +256,14 @@ namespace SanMonica.Police
                     float distance = Vector3.Distance(officer.transform.position, player.transform.position);
                     if (!player.InVehicle && distance < 26f) officer.ForceExitVehicle();
                 }
-                else if (officer.State != PedState.Combat)
+                else if (officer.State != PedState.Combat && repath)
                 {
-                    officer.SetDestination(chasePoint);
+                    // Fan out around the target rather than stacking every unit
+                    // on one point: a cordon, not a conga line.
+                    float angle = i * 2.399963f;                       // golden angle, in radians
+                    float ring = 5f + (i % 3) * 5f;
+                    Vector3 spread = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * ring;
+                    officer.SetDestination(chasePoint + spread);
                     if (officer.State != PedState.Investigate) officer.EnterState(PedState.Investigate);
                 }
             }

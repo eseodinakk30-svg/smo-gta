@@ -100,13 +100,19 @@ namespace SanMonica.Characters
             if (_dead) return;
 
             float amount = info.Amount;
+
+            // Every weapon carries its own headshot and limb multipliers - a
+            // knife in the throat and a rifle round through the skull are not the
+            // same shot. The old fixed numbers ignored that data entirely.
+            float head = info.HeadMultiplier > 0.01f ? info.HeadMultiplier : 3.0f;
+            float limb = info.LimbMultiplier > 0.01f ? info.LimbMultiplier : 0.75f;
             switch (info.Part)
             {
-                case BodyPart.Head: amount *= 3.0f; break;
+                case BodyPart.Head: amount *= head; break;
                 case BodyPart.LeftArm:
-                case BodyPart.RightArm: amount *= 0.72f; break;
+                case BodyPart.RightArm: amount *= limb * 0.96f; break;
                 case BodyPart.LeftLeg:
-                case BodyPart.RightLeg: amount *= 0.78f; break;
+                case BodyPart.RightLeg: amount *= limb * 1.04f; break;
             }
 
             // Armour soaks damage on the torso and head only.

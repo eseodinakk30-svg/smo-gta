@@ -118,6 +118,7 @@ namespace SanMonica.Audio
                 case "splash": return ProceduralAudio.Splash(seed);
                 case "explosion": return ProceduralAudio.Explosion(seed);
                 case "scream": return ProceduralAudio.Scream(seed);
+                case "shout": return ProceduralAudio.Scream(seed ^ 0x51D3);
                 case "land": return ProceduralAudio.Footstep(seed, true);
                 case "jump": return ProceduralAudio.UiTone(220f, 0.14f, 1.5f, false);
                 case "vault": return ProceduralAudio.Footstep(seed, true);

@@ -124,6 +124,10 @@ namespace SanMonica.AI
                     continue;
                 }
 
+                // Never delete someone mid-firefight: a gunman who vanishes
+                // because you ran forty metres is worse than no gunman at all.
+                if (brain.State == PedState.Combat && distance < 160f) continue;
+
                 if (distance > _cfg.pedDespawnRadius && !IsVisible(brain.transform.position))
                     _factory.Despawn(brain);
             }

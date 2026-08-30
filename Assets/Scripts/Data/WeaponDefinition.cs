@@ -31,6 +31,25 @@ namespace SanMonica.Data
         public float armourPiercing = 0f;
         public float impactForce = 180f;
 
+        [Header("Ballistics - range and penetration")]
+        /// <summary>Distance at which damage starts to drop. 0 = 45% of range.</summary>
+        public float falloffStart = 0f;
+        /// <summary>Fraction of the damage left once the round reaches maximum range.</summary>
+        public float falloffDamageFraction = 0.55f;
+        /// <summary>How many extra surfaces a round can punch through. 0 = stops at the first.</summary>
+        public int penetration = -1;
+        /// <summary>Damage lost on each surface a round penetrates.</summary>
+        public float penetrationLoss = 0.4f;
+        /// <summary>How far the shot is heard, in metres. 0 = derived from the category.</summary>
+        public float noiseRadius = 0f;
+        public bool suppressed = false;
+
+        [Header("Burst fire")]
+        /// <summary>Rounds per trigger pull. 0 = not a burst weapon.</summary>
+        public int burstCount = 0;
+        /// <summary>Forced pause after a burst, in seconds.</summary>
+        public float burstInterval = 0.32f;
+
         [Header("Recoil")]
         public float recoilVertical = 1.4f;
         public float recoilHorizontal = 0.5f;
@@ -71,6 +90,22 @@ namespace SanMonica.Data
 
         public float FireInterval => roundsPerMinute > 0f ? 60f / roundsPerMinute : 0.5f;
         public bool IsGun => category != WeaponCategory.Melee && category != WeaponCategory.Unarmed && category != WeaponCategory.Thrown;
+        public bool IsBurst => burstCount > 1;
+        public float FalloffStart => falloffStart > 0.01f ? falloffStart : range * 0.45f;
+
+        /// <summary>
+        /// Damage this round still carries after travelling <paramref name="distance"/>
+        /// metres. Pistol rounds lose most of their sting across a street; rifle
+        /// rounds barely notice, which is what makes the choice of weapon matter
+        /// at range rather than only in a corridor.
+        /// </summary>
+        public float DamageAtRange(float distance)
+        {
+            float start = FalloffStart;
+            if (distance <= start || range <= start) return damage;
+            float t = Mathf.Clamp01((distance - start) / (range - start));
+            return damage * Mathf.Lerp(1f, Mathf.Clamp01(falloffDamageFraction), t);
+        }
     }
 
     public static class WeaponCatalogData
@@ -219,6 +254,109 @@ namespace SanMonica.Data
             w.bodySize = new Vector3(0.07f, 0.22f, 0.07f); w.bodyColor = new Color(0.40f, 0.52f, 0.24f);
             w.roundsPerMinute = 50f; w.cameraShake = 0.3f;
             _all.Add(w);
+
+            // ----------------------------------------------------------------
+            // Quiet and specialist options. A city this size needs more than one
+            // answer to a locked gate or a rooftop sniper.
+            w = W("knife", "Boning Knife", WeaponCategory.Melee, AmmoType.None, 0);
+            w.damage = 34f; w.meleeReach = 1.5f; w.meleeCooldown = 0.34f; w.price = 90; w.impactForce = 120f;
+            w.limbMultiplier = 0.85f; w.headshotMultiplier = 2.4f;
+            w.bodySize = new Vector3(0.015f, 0.05f, 0.30f); w.bodyColor = new Color(0.70f, 0.72f, 0.75f);
+            _all.Add(w);
+
+            w = W("baton", "SMPD Baton", WeaponCategory.Melee, AmmoType.None, 0);
+            w.damage = 22f; w.meleeReach = 1.8f; w.meleeCooldown = 0.45f; w.price = 220; w.impactForce = 260f;
+            w.bodySize = new Vector3(0.035f, 0.035f, 0.58f); w.bodyColor = new Color(0.12f, 0.12f, 0.14f);
+            _all.Add(w);
+
+            w = W("p9-suppressed", "Vireo P9-S", WeaponCategory.Pistol, AmmoType.Pistol, 1);
+            w.damage = 23f; w.range = 72f; w.roundsPerMinute = 300f; w.magazineSize = 12; w.maxReserve = 120;
+            w.reloadTime = 1.7f; w.spreadDegrees = 0.7f; w.recoilVertical = 1.0f; w.price = 6400; w.ammoPrice = 3;
+            w.suppressed = true; w.cameraShake = 0.08f;
+            w.bodySize = new Vector3(0.05f, 0.13f, 0.24f); w.barrelLength = 0.26f; w.barrelRadius = 0.021f;
+            _all.Add(w);
+
+            w = W("sawn-off", "Coast Stubby", WeaponCategory.Shotgun, AmmoType.Shell, 3);
+            w.damage = 17f; w.pelletsPerShot = 10; w.range = 22f; w.roundsPerMinute = 110f; w.magazineSize = 2;
+            w.maxReserve = 40; w.reloadTime = 2.4f; w.spreadDegrees = 9.5f; w.recoilVertical = 5.0f;
+            w.cameraShake = 0.42f; w.price = 5200; w.ammoPrice = 8; w.impactForce = 700f;
+            w.bodySize = new Vector3(0.07f, 0.15f, 0.34f); w.barrelLength = 0.20f; w.barrelRadius = 0.024f;
+            _all.Add(w);
+
+            w = W("burst-carbine", "Ashford AR-7B", WeaponCategory.Rifle, AmmoType.Rifle, 4);
+            w.damage = 33f; w.range = 170f; w.roundsPerMinute = 900f; w.burstCount = 3; w.burstInterval = 0.30f;
+            w.magazineSize = 30; w.maxReserve = 300; w.reloadTime = 2.4f; w.spreadDegrees = 0.9f;
+            w.recoilVertical = 1.5f; w.armourPiercing = 0.3f; w.price = 31000; w.ammoPrice = 5;
+            w.hasStock = true; w.hasForegrip = true; w.bodySize = new Vector3(0.07f, 0.17f, 0.56f);
+            w.barrelLength = 0.32f; w.barrelRadius = 0.016f;
+            _all.Add(w);
+
+            w = W("dmr", "Pinecrest Scout", WeaponCategory.Sniper, AmmoType.Sniper, 5);
+            w.damage = 68f; w.headshotMultiplier = 3.6f; w.range = 280f; w.roundsPerMinute = 150f;
+            w.magazineSize = 10; w.maxReserve = 80; w.reloadTime = 2.6f; w.spreadDegrees = 0.35f;
+            w.aimSpreadMultiplier = 0.06f; w.recoilVertical = 3.4f; w.cameraShake = 0.3f; w.armourPiercing = 0.55f;
+            w.price = 44000; w.ammoPrice = 14; w.hasStock = true; w.hasScope = true; w.impactForce = 600f;
+            w.bodySize = new Vector3(0.07f, 0.17f, 0.74f); w.barrelLength = 0.46f; w.barrelRadius = 0.016f;
+            _all.Add(w);
+
+            w = W("minigun", "Foundry Rotary", WeaponCategory.Heavy, AmmoType.Rifle, 6);
+            w.damage = 24f; w.range = 140f; w.roundsPerMinute = 1800f; w.automatic = true; w.magazineSize = 250;
+            w.maxReserve = 750; w.reloadTime = 7.5f; w.spreadDegrees = 4.2f; w.recoilVertical = 0.8f;
+            w.recoilHorizontal = 1.6f; w.moveSpreadPenalty = 5.5f; w.price = 420000; w.ammoPrice = 6;
+            w.cameraShake = 0.32f; w.hasStock = false; w.hasForegrip = true;
+            w.bodySize = new Vector3(0.14f, 0.20f, 0.70f); w.barrelLength = 0.60f; w.barrelRadius = 0.045f;
+            _all.Add(w);
+
+            w = W("pipebomb", "Pipe Charge", WeaponCategory.Thrown, AmmoType.Grenade, 7);
+            w.damage = 0f; w.explosionRadius = 7.5f; w.explosionDamage = 160f; w.fuseTime = 5.0f;
+            w.throwForce = 15f; w.magazineSize = 1; w.maxReserve = 20; w.price = 700; w.ammoPrice = 180;
+            w.bodySize = new Vector3(0.06f, 0.24f, 0.06f); w.bodyColor = new Color(0.45f, 0.42f, 0.38f);
+            w.roundsPerMinute = 45f; w.cameraShake = 0.42f;
+            _all.Add(w);
+
+            ApplyDerivedStats();
+        }
+
+        /// <summary>
+        /// Fills in the stats that follow from the weapon class, so every entry in
+        /// the table only has to state what makes it different. Anything already
+        /// set by hand above is left alone.
+        /// </summary>
+        private static void ApplyDerivedStats()
+        {
+            foreach (var w in _all)
+            {
+                if (w.penetration < 0)
+                {
+                    switch (w.category)
+                    {
+                        case WeaponCategory.Rifle: w.penetration = 1; break;
+                        case WeaponCategory.Sniper: w.penetration = 3; break;
+                        case WeaponCategory.Heavy: w.penetration = 2; break;
+                        default: w.penetration = 0; break;
+                    }
+                }
+
+                if (w.noiseRadius <= 0f)
+                {
+                    switch (w.category)
+                    {
+                        case WeaponCategory.Unarmed: w.noiseRadius = 6f; break;
+                        case WeaponCategory.Melee: w.noiseRadius = 12f; break;
+                        case WeaponCategory.Thrown: w.noiseRadius = 20f; break;
+                        case WeaponCategory.Pistol: w.noiseRadius = 95f; break;
+                        case WeaponCategory.SMG: w.noiseRadius = 105f; break;
+                        case WeaponCategory.Shotgun: w.noiseRadius = 130f; break;
+                        case WeaponCategory.Rifle: w.noiseRadius = 140f; break;
+                        case WeaponCategory.Sniper: w.noiseRadius = 165f; break;
+                        case WeaponCategory.Heavy: w.noiseRadius = 155f; break;
+                    }
+                }
+
+                // A suppressor is the whole point of carrying one: the shot stops
+                // being a city block event and becomes a room event.
+                if (w.suppressed) w.noiseRadius *= 0.18f;
+            }
         }
     }
 }

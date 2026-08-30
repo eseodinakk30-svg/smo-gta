@@ -56,6 +56,13 @@ namespace SanMonica.AI
         private int _seatIndex;
         private bool _initialised;
         private float _spawnTime;
+        private float _morale = 1f;
+        private Vector3 _coverPoint;
+        private bool _hasCover;
+        private float _coverTimer;
+        private float _threatLastSeen;
+        private Vector3 _threatLastPosition;
+        private bool _warned;
 
         public float DistanceToPlayer { get; private set; }
         public bool InVehicle => CurrentVehicle != null;
@@ -88,6 +95,12 @@ namespace SanMonica.AI
             _stateTimer = 0f;
             _spawnTime = Time.time;
             _initialised = true;
+            _morale = Mathf.Clamp01(0.55f + archetype.bravery * 0.45f);
+            _threatLastSeen = 0f;
+            _warned = false;
+            ClearCover();
+            Perception.ResetAwareness();
+            Weapons.ResetFireState();
 
             if (archetype.possibleWeapons != null && archetype.possibleWeapons.Length > 0 && _rng.Chance(archetype.armedChance))
             {
@@ -154,7 +167,7 @@ namespace SanMonica.AI
                 case PedState.EnterVehicle: TickEnterVehicle(dt); break;
                 case PedState.Driving: TickDriving(dt); break;
                 case PedState.CallPolice: TickCallPolice(dt); break;
-                case PedState.Surrender: TickCower(dt); break;
+                case PedState.Surrender: TickSurrender(dt); break;
             }
 
             UpdateAnimator();
@@ -171,26 +184,24 @@ namespace SanMonica.AI
             // Police engage a wanted player.
             if (IsPolice && playerHostile && Perception.CanSeePlayer)
             {
-                _threat = player.transform;
-                if (State != PedState.Combat) EnterState(PedState.Combat);
+                SetThreat(player.transform);
                 return;
             }
 
-            // Gang and corporate factions attack their enemies and, when the
-            // story says so, the player.
-            if (Archetype != null && Archetype.aggression > 0.4f)
+            // Gang, corporate and police factions attack their enemies and, when
+            // the story says so, the player. Officers were left out of this scan
+            // entirely, so the SMPD walked past cartel gunmen in the street.
+            if ((Archetype != null && Archetype.aggression > 0.4f) || IsPolice)
             {
                 if (FactionRelations.IsHostileToPlayer(Faction) && Perception.CanSeePlayer && DistanceToPlayer < 45f)
                 {
-                    _threat = player.transform;
-                    if (State != PedState.Combat) EnterState(PedState.Combat);
+                    SetThreat(player.transform);
                     return;
                 }
-                var hostile = Perception.FindHostile(Faction, 32f);
+                var hostile = Perception.FindHostile(Faction, IsPolice ? 42f : 32f);
                 if (hostile != null)
                 {
-                    _threat = hostile.transform;
-                    if (State != PedState.Combat) EnterState(PedState.Combat);
+                    SetThreat(hostile.transform);
                     return;
                 }
             }
@@ -227,12 +238,61 @@ namespace SanMonica.AI
                 EnterState(PedState.Wander);
         }
 
-        /// <summary>Points this NPC at a specific target and starts a fight.</summary>
-        public void SetThreat(Transform target, bool engage = true)
+        /// <summary>
+        /// Points this NPC at a specific target and starts a fight. When
+        /// <paramref name="propagate"/> is set the NPC also shouts, and everyone
+        /// of the same faction within earshot joins in - so a gang answers as a
+        /// gang instead of feeding you one man at a time. Alerted allies never
+        /// propagate further, which keeps one gunshot from waking the city.
+        /// </summary>
+        public void SetThreat(Transform target, bool engage = true, bool propagate = true)
         {
+            if (target == null) return;
+            bool fresh = _threat != target;
             _threat = target;
-            if (target != null) Perception.Alertness = 1f;
-            if (engage && target != null && State != PedState.Combat) EnterState(PedState.Combat);
+            _threatLastSeen = 0f;
+            _threatLastPosition = target.position;
+            Perception.Alertness = 1f;
+            if (!engage) return;
+            if (State != PedState.Combat) EnterState(PedState.Combat);
+            if (propagate && fresh) AlertAllies(target);
+        }
+
+        /// <summary>Calls nearby allies of the same faction into the fight.</summary>
+        private void AlertAllies(Transform target, float radius = 32f)
+        {
+            var peds = Services.Peds != null ? Services.Peds.ActivePeds : null;
+            if (peds == null || target == null) return;
+            float sqr = radius * radius;
+            int called = 0;
+            for (int i = 0; i < peds.Count && called < 6; i++)
+            {
+                var mate = peds[i];
+                if (mate == null || mate == this) continue;
+                if (mate.Faction != Faction) continue;
+                if (mate.Health == null || !mate.Health.IsAlive) continue;
+                if (mate.State == PedState.Combat || mate.InVehicle) continue;
+                if ((mate.transform.position - transform.position).sqrMagnitude > sqr) continue;
+                // Bystanders of the same faction do not become gunmen just
+                // because someone shouted; only those with the stomach for it.
+                if (!mate.IsPolice && (mate.Archetype == null || mate.Archetype.aggression < 0.3f)) continue;
+                mate.SetThreat(target, true, false);
+                called++;
+            }
+            if (called > 0) Services.Audio?.PlayOneShot("shout", transform.position, 0.55f);
+        }
+
+        private void ClearCover()
+        {
+            _hasCover = false;
+            _coverTimer = 0f;
+        }
+
+        private void ClearThreat()
+        {
+            _threat = null;
+            _warned = false;
+            ClearCover();
         }
 
         public Transform CurrentThreat => _threat;
@@ -241,6 +301,8 @@ namespace SanMonica.AI
         {
             State = next;
             _stateTimer = 0f;
+            if (Animator != null && next != PedState.Combat && next != PedState.Cower && next != PedState.Surrender)
+                Animator.Crouching = false;
 
             switch (next)
             {
@@ -260,6 +322,9 @@ namespace SanMonica.AI
                     break;
                 case PedState.Combat:
                     Weapons?.SetHolstered(false);
+                    _warned = false;
+                    _threatLastSeen = 0f;
+                    ClearCover();
                     break;
                 case PedState.Dead:
                     if (Controller != null) Controller.enabled = false;
@@ -311,6 +376,25 @@ namespace SanMonica.AI
             }
         }
 
+        /// <summary>
+        /// Hands up. They stay down while the danger is standing over them and
+        /// only get up and run once it has moved on.
+        /// </summary>
+        private void TickSurrender(float dt)
+        {
+            Move(Vector3.zero, 0f, dt);
+            if (Animator != null) { Animator.Crouching = true; Animator.Aiming = false; }
+            if (_threat != null)
+            {
+                Vector3 to = _threat.position - transform.position;
+                to.y = 0f;
+                if (to.sqrMagnitude > 0.01f)
+                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(to.normalized), 1f - Mathf.Exp(-4f * dt));
+            }
+            bool clear = _threat == null || Vector3.Distance(transform.position, _threat.position) > 18f;
+            if (_stateTimer > 4f && clear) EnterState(PedState.Flee);
+        }
+
         private void TickCallPolice(float dt)
         {
             Move(Vector3.zero, 0f, dt);
@@ -332,56 +416,192 @@ namespace SanMonica.AI
         {
             if (_threat == null) { EnterState(PedState.Wander); return; }
             var threatHealth = _threat.GetComponent<CharacterHealth>();
-            if (threatHealth != null && !threatHealth.IsAlive) { _threat = null; EnterState(PedState.Wander); return; }
+            if (threatHealth != null && !threatHealth.IsAlive) { ClearThreat(); EnterState(PedState.Wander); return; }
 
             float distance = Vector3.Distance(transform.position, _threat.position);
             bool visible = Perception.CanSee(_threat, out _);
+            if (visible) { _threatLastSeen = 0f; _threatLastPosition = _threat.position; }
+            else _threatLastSeen += dt;
 
-            if (!visible && _stateTimer > 6f)
+            // Lost them: go and look where they were last seen, rather than
+            // standing in the road aiming at a wall.
+            if (_threatLastSeen > 6f)
             {
-                SetDestination(Perception.LastKnownPlayerPosition);
+                SetDestination(_threatLastPosition);
+                ClearCover();
                 EnterState(PedState.Investigate);
                 return;
             }
 
-            // Face the threat and shoot, closing the distance if unarmed.
+            UpdateMorale(dt);
+            if (ShouldBreakOff(distance))
+            {
+                bool hasGun = Weapons != null && Weapons.HasRangedWeapon;
+                ClearCover();
+                EnterState(!hasGun && distance < 7f ? PedState.Surrender : PedState.Flee);
+                return;
+            }
+
             Vector3 toThreat = _threat.position - transform.position;
             toThreat.y = 0f;
             if (toThreat.sqrMagnitude > 0.01f)
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(toThreat.normalized), 1f - Mathf.Exp(-9f * dt));
 
             bool armed = Weapons != null && Weapons.HasRangedWeapon;
-            float preferred = armed ? (IsPolice ? 12f : 9f) : 1.6f;
+            bool reloading = Weapons != null && Weapons.IsReloading;
+            bool pinned = Perception.Suppression > 0.45f;
 
-            Vector3 desired = Vector3.zero;
-            if (distance > preferred * 1.3f) desired = toThreat.normalized;
-            else if (distance < preferred * 0.6f) desired = -toThreat.normalized;
-            else desired = Vector3.Cross(Vector3.up, toThreat.normalized) * (Mathf.Sin(Time.time * 0.8f + GetInstanceID()) > 0f ? 1f : -1f);
+            // Cover. An armed NPC who is reloading or taking fire gets behind
+            // something instead of standing in the open trading bullets.
+            _coverTimer -= dt;
+            if (armed && (reloading || pinned) && _coverTimer <= 0f)
+            {
+                _coverTimer = 1.5f;
+                if (FindCover(_threat.position, out var spot)) { _coverPoint = spot; _hasCover = true; }
+            }
+            if (_hasCover && !reloading && !pinned && Vector3.Distance(transform.position, _coverPoint) < 1.4f)
+                ClearCover();   // the pressure is off: lean back out and fight
 
             float speed = Archetype != null ? Archetype.runSpeed : 3.6f;
-            Move(desired * speed, speed, dt);
+            float preferred = armed ? (IsPolice ? 13f : 10f) : 1.7f;
+
+            Vector3 desired;
+            if (_hasCover)
+            {
+                Vector3 toCover = _coverPoint - transform.position;
+                toCover.y = 0f;
+                bool arrived = toCover.sqrMagnitude < 1.6f;
+                desired = arrived ? Vector3.zero : toCover.normalized;
+                if (Animator != null) Animator.Crouching = arrived;
+            }
+            else
+            {
+                if (Animator != null) Animator.Crouching = false;
+                if (distance > preferred * 1.3f) desired = toThreat.normalized;
+                else if (distance < preferred * 0.6f) desired = -toThreat.normalized;
+                else desired = Vector3.Cross(Vector3.up, toThreat.normalized) * (Mathf.Sin(Time.time * 0.8f + GetInstanceID()) > 0f ? 1f : -1f);
+            }
+
+            desired = KeepOnLand(desired);
+            int avoidMask = (1 << GameLayers.Building) | (1 << GameLayers.Prop) | GameLayers.VehicleMask;
+            Move(NavGraph.AvoidObstacles(transform.position, desired * speed, 0.45f, 2.2f, avoidMask), speed, dt);
 
             if (Animator != null) Animator.Aiming = armed && visible;
+            if (!visible || Weapons == null) return;
 
-            if (visible && Weapons != null)
+            // The SMPD give one warning before opening fire on a suspect who is
+            // not already shooting at them.
+            if (IsPolice && !_warned)
             {
-                _fireTimer -= dt;
-                if (armed)
+                _warned = true;
+                int level = Services.Wanted != null ? Services.Wanted.Level : 0;
+                bool atPlayer = Services.Player != null && _threat == Services.Player.transform;
+                if (atPlayer && level <= 1)
                 {
-                    if (_fireTimer <= 0f)
-                    {
-                        Vector3 aimPoint = _threat.position + Vector3.up * 1.0f;
-                        float accuracy = Mathf.Lerp(0.35f, 0.95f, Archetype != null ? Archetype.aggression : 0.5f);
-                        Weapons.AiFire(aimPoint, accuracy);
-                        _fireTimer = _rng.Range(0.25f, 1.1f) / Mathf.Max(0.3f, Archetype != null ? Archetype.aggression : 0.5f);
-                    }
-                }
-                else if (distance < 2.2f && _fireTimer <= 0f)
-                {
-                    Weapons.Melee();
-                    _fireTimer = 0.9f;
+                    Services.Audio?.PlayOneShot("shout", transform.position, 0.7f);
+                    if (DistanceToPlayer < 34f) GameEvents.Notify("SMPD: on the ground, now!", 2.2f);
+                    _fireTimer = 1.5f;
                 }
             }
+
+            _fireTimer -= dt;
+            if (armed)
+            {
+                // The weapon governs its own cadence now - bursts, reloads and
+                // recoil all live in the holder - so this timer is a reaction
+                // delay between engagements, not a metronome between rounds.
+                if (_fireTimer <= 0f)
+                {
+                    float aggression = Archetype != null ? Archetype.aggression : 0.5f;
+                    float accuracy = Mathf.Clamp01(Mathf.Lerp(0.3f, 0.92f, aggression)
+                                                   - Perception.Suppression * 0.35f
+                                                   + (distance < 12f ? 0.1f : 0f));
+                    Vector3 aimPoint = _threat.position + Vector3.up * Mathf.Lerp(0.85f, 1.35f, accuracy);
+                    Weapons.AiFire(aimPoint, accuracy);
+                    if (!Weapons.InBurst) _fireTimer = _rng.Range(0.2f, 0.75f);
+                }
+            }
+            else if (distance < 2.2f && _fireTimer <= 0f)
+            {
+                Weapons.Melee();
+                _fireTimer = 0.9f;
+            }
+        }
+
+        /// <summary>
+        /// How much fight is left. Wounds, nerve and being shot at all feed into
+        /// one number, so a cornered gangster with a rifle behaves differently
+        /// from a shopkeeper who picked up a bat.
+        /// </summary>
+        private void UpdateMorale(float dt)
+        {
+            float health = Health != null && Health.MaxHealth > 0f ? Health.Health / Health.MaxHealth : 1f;
+            float bravery = Archetype != null ? Archetype.bravery : 0.25f;
+            float suppression = Perception != null ? Perception.Suppression : 0f;
+            float target = Mathf.Clamp01(health * 0.7f + bravery * 0.45f - suppression * 0.4f);
+            _morale = Mathf.MoveTowards(_morale, target, dt * 0.9f);
+        }
+
+        /// <summary>Police never break. Everyone else eventually does.</summary>
+        private bool ShouldBreakOff(float distance)
+        {
+            if (IsPolice) return false;
+            bool armed = Weapons != null && Weapons.HasRangedWeapon;
+            float breakPoint = armed ? 0.28f : 0.55f;
+            if (!armed && distance > 12f) breakPoint = 0.70f;
+            return _morale < breakPoint;
+        }
+
+        /// <summary>
+        /// Looks for a spot the threat cannot see into and that this NPC can
+        /// actually reach. Eight samples on a one-and-a-half second cooldown is
+        /// cheap enough to run on every gunman in a firefight.
+        /// </summary>
+        private bool FindCover(Vector3 threatPosition, out Vector3 cover)
+        {
+            cover = transform.position;
+            Vector3 eye = threatPosition + Vector3.up * 1.5f;
+            Vector3 here = transform.position + Vector3.up * 1.1f;
+            float best = float.MaxValue;
+            bool found = false;
+
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = (i / 8f + _rng.Value * 0.12f) * Mathf.PI * 2f;
+                float radius = _rng.Range(3.5f, 12f);
+                Vector3 candidate = transform.position + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+                if (Services.Map != null && Services.Map.IsWater(candidate.x, candidate.z)) continue;
+                if (Services.Nav != null) candidate = Services.Nav.SnapToWalkable(candidate, 6f);
+
+                Vector3 chest = candidate + Vector3.up * 1.1f;
+                if (!Physics.Linecast(eye, chest, GameLayers.VisionBlockMask, QueryTriggerInteraction.Ignore)) continue;
+                if (Physics.Linecast(here, chest, GameLayers.VisionBlockMask, QueryTriggerInteraction.Ignore)) continue;
+
+                float score = Vector3.Distance(transform.position, candidate);
+                if (score < best) { best = score; cover = candidate; found = true; }
+            }
+            return found;
+        }
+
+        /// <summary>
+        /// Combat steering is free-form, and free-form steering used to reverse
+        /// gunmen off the end of piers. Anything that would step into the bay is
+        /// turned along the shoreline instead.
+        /// </summary>
+        private Vector3 KeepOnLand(Vector3 desired)
+        {
+            var map = Services.Map;
+            if (map == null || desired.sqrMagnitude < 0.001f) return desired;
+            Vector3 here = transform.position;
+            if (map.IsWater(here.x, here.z)) return desired;    // already wet: let them wade out
+
+            Vector3 step = desired.normalized * 1.6f;
+            if (!map.IsWater(here.x + step.x, here.z + step.z)) return desired;
+
+            Vector3 side = Vector3.Cross(Vector3.up, desired.normalized) * 1.6f;
+            if (!map.IsWater(here.x + side.x, here.z + side.z)) return side.normalized;
+            if (!map.IsWater(here.x - side.x, here.z - side.z)) return -side.normalized;
+            return Vector3.zero;
         }
 
         private void TickEnterVehicle(float dt)
@@ -545,8 +765,8 @@ namespace SanMonica.AI
         // ------------------------------------------------------------------
         private void OnDamaged(DamageInfo info)
         {
+            Perception?.Suppress(0.5f);
             if (info.Source == null) return;
-            _threat = info.Source.transform;
             Perception.Alertness = 1f;
 
             bool fromPlayer = Services.Player != null && info.Source == Services.Player.gameObject;
@@ -562,9 +782,17 @@ namespace SanMonica.AI
             }
 
             if (Archetype != null && (Archetype.aggression > 0.35f || IsPolice) && _rng.Value < Archetype.bravery)
-                EnterState(PedState.Combat);
+            {
+                SetThreat(info.Source.transform);
+            }
             else
-                EnterState(_rng.Chance(0.7f) ? PedState.Flee : PedState.Cower);
+            {
+                // Being shot repeatedly should not restart the panic every frame:
+                // one hit sends them running, the rest keep them running.
+                SetThreat(info.Source.transform, false, false);
+                if (State != PedState.Flee && State != PedState.Cower && State != PedState.Surrender)
+                    EnterState(_rng.Chance(0.7f) ? PedState.Flee : PedState.Cower);
+            }
         }
 
         private void OnDied(DamageInfo info)
@@ -596,6 +824,11 @@ namespace SanMonica.AI
             _velocity = Vector3.zero;
             _verticalVelocity = 0f;
             _threat = null;
+            _morale = 1f;
+            _warned = false;
+            _threatLastSeen = 0f;
+            _hasCover = false;
+            _coverTimer = 0f;
             State = PedState.Wander;
             _initialised = false;
         }

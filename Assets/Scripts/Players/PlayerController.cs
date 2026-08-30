@@ -400,6 +400,7 @@ namespace SanMonica.Players
                 if (Weapons.TryFire(ray, IsAiming))
                     _camera?.Shake(Weapons.CurrentDefinition != null ? Weapons.CurrentDefinition.cameraShake : 0.1f, 0.18f);
             }
+            else Weapons.ReleaseTrigger();   // semi-automatic weapons need the button to come back up
 
             if (_input.CameraTogglePressed) _camera?.ToggleFirstPerson();
         }
@@ -532,6 +533,7 @@ namespace SanMonica.Players
             IsAiming = _input.Aim && Weapons != null && Weapons.CanAim;
             if (_camera != null) _camera.Aiming = IsAiming;
             Weapons?.SetAiming(IsAiming);
+            if (Weapons != null && !_input.Fire) Weapons.ReleaseTrigger();
             if (_input.Fire && Weapons != null && vehicle.AllowsDriveBy)
             {
                 Ray ray = _camera != null ? _camera.ScreenCenterRay() : new Ray(transform.position, transform.forward);

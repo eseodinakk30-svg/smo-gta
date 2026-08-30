@@ -147,6 +147,14 @@ namespace SanMonica.Economy
             var economy = Services.Economy;
             var player = Services.Player;
             if (economy == null || player == null) return false;
+            // Never take money for something that cannot be delivered.
+            if (offer.Kind == ShopOfferKind.Ammo && offer.Payload is WeaponDefinition ammoFor
+                && player.Weapons != null && player.Weapons.IsAmmoFull(ammoFor.ammoType))
+            {
+                GameEvents.Notify("You are already carrying all the " + ammoFor.ammoType + " ammunition you can", 2.6f);
+                return false;
+            }
+
             if (!economy.TrySpend(offer.Price, offer.Name)) return false;
 
             switch (offer.Kind)

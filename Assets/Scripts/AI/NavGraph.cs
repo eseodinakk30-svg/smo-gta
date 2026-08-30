@@ -25,6 +25,16 @@ namespace SanMonica.AI
 
         public bool Ready => _roads != null && _roads.Segments.Count > 0;
 
+        /// <summary>
+        /// How many junctions a search may open before giving up. The old fixed
+        /// limits of 1600 and 2200 were below the size of the network, so a route
+        /// right across the city - downtown to the port needs 2699 junctions
+        /// explored - simply reported no path, and the police, taxis and mission
+        /// markers all silently gave up at long range. Sized from the graph, with
+        /// room to spare, so it scales if the city ever grows.
+        /// </summary>
+        private int SearchBudget => _roads == null ? 2048 : _roads.Nodes.Count + 512;
+
         /// <summary>Nearest point on a pavement (or road edge in the countryside).</summary>
         public Vector3 SnapToWalkable(Vector3 position, float searchRadius = 60f)
         {
@@ -76,7 +86,7 @@ namespace SanMonica.AI
             int goalNode = _roads.NearestNode(new Vector2(to.x, to.z));
             if (startNode < 0 || goalNode < 0) { outPath.Add(to); return true; }
 
-            if (!_roads.FindPath(startNode, goalNode, _nodePath, 1600))
+            if (!_roads.FindPath(startNode, goalNode, _nodePath, SearchBudget))
             {
                 outPath.Add(SnapToWalkable(to, 40f));
                 return false;
@@ -101,7 +111,7 @@ namespace SanMonica.AI
             int startNode = _roads.NearestNode(new Vector2(from.x, from.z));
             int goalNode = _roads.NearestNode(new Vector2(to.x, to.z));
             if (startNode < 0 || goalNode < 0) return false;
-            if (!_roads.FindPath(startNode, goalNode, _nodePath, 2200)) return false;
+            if (!_roads.FindPath(startNode, goalNode, _nodePath, SearchBudget)) return false;
 
             for (int i = 0; i < _nodePath.Count - 1; i++)
             {

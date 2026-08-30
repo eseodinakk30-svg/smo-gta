@@ -189,6 +189,7 @@ internal static class Probe
         CheckRoadNetwork(cfg, map, roads);
         CheckBridges(cfg, map, roads, builder, geo);
         CheckCityContent(cfg, map, roads, layout);
+        CheckNavigation(cfg, map, roads, layout);
 
         Console.WriteLine(_failures == 0
             ? "world generation OK"
@@ -361,6 +362,75 @@ internal static class Probe
                           "connected to the main network");
         if (reach < 0.85f)
             Fail($"only {reach:P1} of the road network is connected - traffic and missions cannot cross the city");
+    }
+
+    /// <summary>
+    /// Connectivity in the graph is one thing; the pathfinder finding a route is
+    /// another. Police chases, taxi rides and every mission marker depend on
+    /// FindDrivePath actually returning something between two distant districts.
+    /// </summary>
+    private static void CheckNavigation(WorldConfig cfg, WorldMap map, RoadNetwork roads, CityLayout layout)
+    {
+        var nav = new SanMonica.AI.NavGraph();
+        nav.Initialize(roads, map);
+        if (!nav.Ready) { Fail("the navigation graph is not ready after Initialize"); return; }
+
+        var places = new List<(string, Vector2)>
+        {
+            ("downtown", map.DowntownCenter),
+            ("port", map.PortCenter),
+            ("airport", map.AirportCenter),
+            ("marina", map.MarinaCenter),
+            ("marigold", map.MarigoldCenter),
+        };
+
+        var path = new List<Vector3>();
+        int tried = 0, found = 0;
+        for (int i = 0; i < places.Count; i++)
+        for (int j = i + 1; j < places.Count; j++)
+        {
+            var a = new Vector3(places[i].Item2.x, 0f, places[i].Item2.y);
+            var b = new Vector3(places[j].Item2.x, 0f, places[j].Item2.y);
+            tried++;
+            if (nav.FindDrivePath(a, b, path) && path.Count > 2) found++;
+            else
+            {
+                // Same component but no path means the search gave up, not that
+                // the city is cut - a very different fix.
+                int na = roads.NearestNode(new Vector2(a.x, a.z));
+                int nb = roads.NearestNode(new Vector2(b.x, b.z));
+                bool connected = Reachable(roads, na, nb, out int explored);
+                Console.WriteLine($"  no driving route from {places[i].Item1} to {places[j].Item1}: " +
+                                  (connected
+                                    ? $"nodes ARE connected, {explored} nodes had to be explored - the search budget is too small"
+                                    : "the nodes are on separate networks"));
+            }
+        }
+        Console.WriteLine($"driving routes between districts: {found} of {tried} found");
+        if (found < tried) Fail($"{tried - found} district pairs have no driving route between them");
+    }
+
+    /// <summary>Plain breadth-first reachability, with no budget, plus how far it had to look.</summary>
+    private static bool Reachable(RoadNetwork roads, int from, int to, out int explored)
+    {
+        explored = 0;
+        if (from < 0 || to < 0) return false;
+        var seen = new HashSet<int> { from };
+        var queue = new Queue<int>();
+        queue.Enqueue(from);
+        while (queue.Count > 0)
+        {
+            int n = queue.Dequeue(); explored++;
+            if (n == to) return true;
+            var node = roads.Nodes[n];
+            for (int i = 0; i < node.Segments.Count; i++)
+            {
+                var sg = roads.Segments[node.Segments[i]];
+                foreach (int nx in new[] { sg.NodeA, sg.NodeB })
+                    if (nx >= 0 && seen.Add(nx)) queue.Enqueue(nx);
+            }
+        }
+        return false;
     }
 
     /// <summary>Shops and properties the player is sent to must exist and be placed sanely.</summary>

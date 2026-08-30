@@ -29,6 +29,12 @@ namespace SanMonica.Characters
         public Transform LeftHandAttach;
         public Transform HeadAttach;
 
+        /// <summary>
+        /// The appearance this body was built from. Kept so clothes and haircuts
+        /// can change it and rebuild, instead of being a notification that lies.
+        /// </summary>
+        public CharacterAppearance Appearance;
+
         private readonly Quaternion[] _bindLocalRotations = new Quaternion[(int)HumanBone.Count];
         private readonly Vector3[] _bindLocalPositions = new Vector3[(int)HumanBone.Count];
         private int _currentLod = -1;
@@ -56,6 +62,14 @@ namespace SanMonica.Characters
                 Bones[i].localRotation = _bindLocalRotations[i];
                 Bones[i].localPosition = _bindLocalPositions[i];
             }
+        }
+
+        /// <summary>Re-applies the current level of detail after the meshes change.</summary>
+        public void RefreshMesh()
+        {
+            int lod = _currentLod < 0 ? 0 : _currentLod;
+            _currentLod = -1;
+            SetMeshLod(lod);
         }
 
         /// <summary>Swaps between the detailed and the simplified body mesh.</summary>

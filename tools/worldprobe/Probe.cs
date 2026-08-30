@@ -190,6 +190,8 @@ internal static class Probe
         CheckBridges(cfg, map, roads, builder, geo);
         CheckCityContent(cfg, map, roads, layout);
         CheckCombatData(db);
+        CheckDataTables(db);
+        CheckStory(db, layout);
         CheckNavigation(cfg, map, roads, layout);
 
         Console.WriteLine(_failures == 0
@@ -584,6 +586,220 @@ internal static class Probe
         }
         Console.WriteLine($"peds: {db.peds.Count} archetypes, {armed} can be armed, {references} loadout entries");
         if (armed == 0) Fail("no archetype can ever be armed");
+    }
+
+    /// <summary>
+    /// Vehicles, shops, radio and the spawn tables. Anything the game looks up
+    /// by a string it wrote itself is checked here, because a missing id does
+    /// not throw - it just makes a street, a shop or a police response quietly
+    /// stop happening.
+    /// </summary>
+    private static void CheckDataTables(GameDatabase db)
+    {
+        // ---- vehicles ----
+        var ids = new System.Collections.Generic.HashSet<string>();
+        int cars = 0, boats = 0, aircraft = 0, forSale = 0;
+        foreach (var v in db.vehicles)
+        {
+            if (string.IsNullOrEmpty(v.id)) { Fail("a vehicle has no id"); continue; }
+            if (!ids.Add(v.id)) Fail($"vehicle id '{v.id}' is used twice");
+            if (v.mass <= 0f) Fail($"vehicle '{v.id}' has no mass");
+            if (v.topSpeedKph <= 0f) Fail($"vehicle '{v.id}' cannot move");
+            if (v.maxHealth <= 0f) Fail($"vehicle '{v.id}' starts destroyed");
+            if (v.seats < 1) Fail($"vehicle '{v.id}' has nowhere to sit");
+            if (v.IsGroundCar && v.wheelCount < 2) Fail($"car '{v.id}' has {v.wheelCount} wheels");
+            if (v.IsGroundCar) cars++;
+            if (v.IsWatercraft) boats++;
+            if (v.IsAircraft) aircraft++;
+            if (v.price > 0 && !v.IsEmergency) forSale++;
+        }
+        Console.WriteLine($"vehicles: {db.vehicles.Count} total, {cars} cars, {boats} boats, {aircraft} aircraft, {forSale} sellable");
+        if (cars == 0) Fail("no drivable car exists");
+        if (boats == 0) Fail("no boat exists - the bay is decoration");
+        if (aircraft == 0) Fail("no aircraft exists");
+        // Every dealer floor has to be reachable. The marine and aviation
+        // showrooms used to reuse the car price band, which silently filtered
+        // out four of the five aircraft and two of the five boats.
+        int everyday = db.VehiclesForSale(DealerStock.Everyday).Count;
+        int luxury = db.VehiclesForSale(DealerStock.Luxury).Count;
+        int marineStock = db.VehiclesForSale(DealerStock.Marine).Count;
+        int aviationStock = db.VehiclesForSale(DealerStock.Aviation).Count;
+        if (everyday == 0) Fail("no everyday vehicle is for sale");
+        if (luxury == 0) Fail("no luxury vehicle is for sale");
+
+        int marineTotal = 0, aviationTotal = 0;
+        foreach (var v in db.vehicles)
+        {
+            if (v.price <= 0 || v.IsEmergency) continue;
+            if (v.IsWatercraft) marineTotal++;
+            if (v.IsAircraft) aviationTotal++;
+        }
+        Console.WriteLine($"dealers: {everyday} everyday, {luxury} prestige, " +
+                          $"marine {marineStock}/{marineTotal} boats, aviation {aviationStock}/{aviationTotal} aircraft");
+        if (marineStock < marineTotal) Fail($"{marineTotal - marineStock} boats are priced out of the only shop that sells boats");
+        if (aviationStock < aviationTotal) Fail($"{aviationTotal - aviationStock} aircraft are priced out of the only shop that sells aircraft");
+
+        // A showroom that sells nothing is a locked door with a sign on it.
+        foreach (DealerStock stock in Enum.GetValues(typeof(DealerStock)))
+            if (db.VehiclesForSale(stock).Count == 0)
+                Fail($"the {stock} showroom has nothing on the floor");
+
+        // Ids the code names directly. A typo here disables a whole system in
+        // silence: no patrol cars, no helicopter, no mission car.
+        foreach (var required in new[] { "patrol", "interceptor", "enforcer", "heli-police", "meridian", "brawler" })
+            if (db.Vehicle(required) == null)
+                Fail($"vehicle '{required}' is named in code but missing from the catalogue");
+
+        // ---- pedestrian spawn coverage ----
+        // PopulationManager gives up on a spawn when PickPed returns null, so a
+        // district and hour with no eligible archetype is an empty street.
+        var districts = (DistrictType[])Enum.GetValues(typeof(DistrictType));
+        int emptySlots = 0;
+        var rng = new SanMonica.Core.Rng(20260830);
+        foreach (var d in districts)
+        {
+            for (int hour = 0; hour < 24; hour++)
+            {
+                bool any = false;
+                for (int attempt = 0; attempt < 6 && !any; attempt++)
+                    any = db.PickPed(ref rng, d, hour) != null;
+                if (!any) { emptySlots++; if (emptySlots <= 5) Console.WriteLine($"  no pedestrian for {d} at {hour:00}:00"); }
+            }
+        }
+        Console.WriteLine($"ped spawn coverage: {districts.Length * 24 - emptySlots} of {districts.Length * 24} district/hour slots populated");
+        if (emptySlots > 0) Fail($"{emptySlots} district/hour combinations spawn no pedestrians at all");
+        if (db.Ped("citizen") == null) Fail("archetype 'citizen' is missing - PickPed's fallback returns null");
+
+        int emptyTraffic = 0;
+        foreach (var d in districts)
+            if (db.PickTrafficVehicle(ref rng, d) == null) emptyTraffic++;
+        if (emptyTraffic > 0) Fail($"{emptyTraffic} districts have no traffic vehicle to spawn");
+
+        // ---- shops ----
+        ids.Clear();
+        var shopTypes = new System.Collections.Generic.HashSet<ShopType>();
+        foreach (var shop in db.shops)
+        {
+            if (string.IsNullOrEmpty(shop.id)) { Fail("a shop has no id"); continue; }
+            if (!ids.Add(shop.id)) Fail($"shop id '{shop.id}' is used twice");
+            shopTypes.Add(shop.type);
+        }
+        var allShopTypes = (ShopType[])Enum.GetValues(typeof(ShopType));
+        Console.WriteLine($"shops: {db.shops.Count} definitions covering {shopTypes.Count} of {allShopTypes.Length} shop types");
+        foreach (var type in allShopTypes)
+            if (!shopTypes.Contains(type))
+                Fail($"shop type {type} exists in the enum and in no catalogue - it can never be built");
+
+        // ---- the wardrobe ----
+        var wardrobeIds = new System.Collections.Generic.HashSet<string>();
+        foreach (var outfit in SanMonica.Characters.Wardrobe.Outfits)
+        {
+            if (!wardrobeIds.Add("o:" + outfit.Id)) Fail($"outfit id '{outfit.Id}' is used twice");
+            if (outfit.Price <= 0) Fail($"outfit '{outfit.Id}' is free");
+            if (string.IsNullOrEmpty(outfit.Name)) Fail("an outfit has no name");
+        }
+        foreach (var hair in SanMonica.Characters.Wardrobe.Hairstyles)
+        {
+            if (!wardrobeIds.Add("h:" + hair.Id)) Fail($"hairstyle id '{hair.Id}' is used twice");
+            if (hair.Price <= 0) Fail($"hairstyle '{hair.Id}' is free");
+        }
+        Console.WriteLine($"wardrobe: {SanMonica.Characters.Wardrobe.Outfits.Length} outfits, " +
+                          $"{SanMonica.Characters.Wardrobe.Hairstyles.Length} hairstyles");
+        if (SanMonica.Characters.Wardrobe.Outfits.Length < 2) Fail("there is nothing to wear");
+        if (SanMonica.Characters.Wardrobe.Hairstyles.Length < 2) Fail("the barber has one haircut");
+
+        // ---- radio ----
+        int stations = db.radioStations.Count;
+        Console.WriteLine($"radio: {stations} stations");
+        if (stations == 0) Fail("no radio station exists - every car radio is dead");
+    }
+
+    /// <summary>
+    /// The story graph. A prerequisite pointing at a mission id that does not
+    /// exist, or a chain that can never start, locks the player out of the game
+    /// with no error message anywhere.
+    /// </summary>
+    private static void CheckStory(GameDatabase db, CityLayout layout)
+    {
+        var story = SanMonica.Missions.StoryCatalog.BuildStory();
+        var side = SanMonica.Missions.StoryCatalog.BuildSideMissions();
+        var all = new System.Collections.Generic.List<SanMonica.Missions.MissionDefinition>(story);
+        all.AddRange(side);
+
+        var byId = new System.Collections.Generic.Dictionary<string, SanMonica.Missions.MissionDefinition>();
+        foreach (var m in all)
+        {
+            if (string.IsNullOrEmpty(m.Id)) { Fail("a mission has no id"); continue; }
+            if (byId.ContainsKey(m.Id)) Fail($"mission id '{m.Id}' is used twice");
+            else byId[m.Id] = m;
+        }
+
+        int objectives = 0, spawns = 0, shopAnchors = 0;
+        var neededShops = new System.Collections.Generic.HashSet<ShopType>();
+        foreach (var m in all)
+        {
+            if (m.Objectives == null || m.Objectives.Count == 0) { Fail($"mission '{m.Id}' has no objectives"); continue; }
+            if (m.RewardCash < 0) Fail($"mission '{m.Id}' has a negative reward");
+            if (string.IsNullOrEmpty(m.Title)) Fail($"mission '{m.Id}' has no title");
+
+            if (m.Prerequisites != null)
+                foreach (var pre in m.Prerequisites)
+                    if (!byId.ContainsKey(pre))
+                        Fail($"mission '{m.Id}' requires '{pre}', which does not exist");
+
+            if (m.StartAnchor.Kind == SanMonica.Missions.AnchorKind.NearestShop)
+            { neededShops.Add(m.StartAnchor.Shop); shopAnchors++; }
+
+            foreach (var o in m.Objectives)
+            {
+                objectives++;
+                if (string.IsNullOrEmpty(o.Description)) Fail($"an objective of '{m.Id}' has no description");
+                if (o.EnemyCount > 0)
+                {
+                    spawns++;
+                    if (string.IsNullOrEmpty(o.PedArchetype) || db.Ped(o.PedArchetype) == null)
+                        Fail($"mission '{m.Id}' spawns enemies of type '{o.PedArchetype}', which is not in the catalogue");
+                }
+                if (!string.IsNullOrEmpty(o.VehicleId) && db.Vehicle(o.VehicleId) == null)
+                    Fail($"mission '{m.Id}' needs vehicle '{o.VehicleId}', which is not in the catalogue");
+                if (o.Anchor.Kind == SanMonica.Missions.AnchorKind.NearestShop)
+                { neededShops.Add(o.Anchor.Shop); shopAnchors++; }
+            }
+        }
+
+        // Every shop type a mission sends you to has to exist in the world, not
+        // just in the catalogue.
+        foreach (var type in neededShops)
+        {
+            bool placed = false;
+            foreach (var s in layout.Shops)
+                if (s.Definition != null && s.Definition.type == type) { placed = true; break; }
+            if (!placed) Fail($"missions send the player to a {type}, and the city generates none");
+        }
+
+        // Everything must be reachable from a mission with no prerequisites.
+        var reachable = new System.Collections.Generic.HashSet<string>();
+        bool grew = true;
+        while (grew)
+        {
+            grew = false;
+            foreach (var m in all)
+            {
+                if (reachable.Contains(m.Id)) continue;
+                bool ready = true;
+                if (m.Prerequisites != null)
+                    foreach (var pre in m.Prerequisites)
+                        if (!reachable.Contains(pre)) { ready = false; break; }
+                if (ready) { reachable.Add(m.Id); grew = true; }
+            }
+        }
+        foreach (var m in all)
+            if (!reachable.Contains(m.Id))
+                Fail($"mission '{m.Id}' can never unlock - its prerequisites form a loop or a dead end");
+
+        Console.WriteLine($"story: {story.Count} story missions, {side.Count} side missions, {objectives} objectives, " +
+                          $"{spawns} enemy spawns, {shopAnchors} shop anchors, {reachable.Count}/{all.Count} reachable");
+        if (story.Count == 0) Fail("there is no story");
     }
 
     /// <summary>Downward ray against every triangle in the geometry, Moller-Trumbore.</summary>

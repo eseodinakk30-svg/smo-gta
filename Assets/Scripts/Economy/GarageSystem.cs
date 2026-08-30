@@ -29,6 +29,9 @@ namespace SanMonica.Economy
         private readonly Dictionary<string, VehicleDefinition> _modifiedDefinitions = new Dictionary<string, VehicleDefinition>();
 
         public int Capacity = 20;
+
+        /// <summary>No room left in the collection - a purchase would be lost.</summary>
+        public bool IsFull => Collection.Count >= Capacity;
         public Vehicle DeliveredVehicle { get; private set; }
 
         public bool AddOwnedVehicle(string definitionId, Color? paint = null)
@@ -68,39 +71,76 @@ namespace SanMonica.Economy
             return true;
         }
 
-        public void ApplyUpgrade(Vehicle vehicle, string upgrade)
+        public const int MaxUpgradeLevel = 3;
+
+        /// <summary>Current level of one upgrade on a vehicle, 0 when unowned.</summary>
+        public int UpgradeLevel(Vehicle vehicle, string upgrade)
+        {
+            if (vehicle == null) return 0;
+            var entry = FindEntry(vehicle);
+            if (entry == null) return 0;
+            switch (upgrade)
+            {
+                case "engine": return entry.Engine;
+                case "brakes": return entry.Brakes;
+                case "grip": return entry.Grip;
+                case "armour": return entry.Armour;
+                default: return 0;
+            }
+        }
+
+        /// <summary>
+        /// True when this upgrade would actually change something. The shop asks
+        /// before charging - the old code capped the level silently, so a fourth
+        /// engine tune took the money and installed nothing.
+        /// </summary>
+        public bool CanUpgrade(Vehicle vehicle, string upgrade)
+        {
+            if (vehicle == null || string.IsNullOrEmpty(upgrade)) return false;
+            if (upgrade == "respray") return true;
+            return UpgradeLevel(vehicle, upgrade) < MaxUpgradeLevel;
+        }
+
+        public bool ApplyUpgrade(Vehicle vehicle, string upgrade)
         {
             if (vehicle == null || string.IsNullOrEmpty(upgrade))
             {
-                GameEvents.Notify("Drive a vehicle in first", 2.5f);
-                return;
+                GameEvents.Notify("Bring a vehicle to the ramp first", 2.5f);
+                return false;
+            }
+            if (!CanUpgrade(vehicle, upgrade))
+            {
+                GameEvents.Notify("That is already fitted at the highest grade", 2.5f);
+                return false;
             }
             var entry = FindEntry(vehicle);
             if (entry == null)
             {
-                if (!AddOwnedVehicle(vehicle.Definition.id, vehicle.Paint)) return;
+                if (!AddOwnedVehicle(vehicle.Definition.id, vehicle.Paint)) return false;
                 entry = Collection[Collection.Count - 1];
                 vehicle.IsPlayerOwned = true;
             }
 
             switch (upgrade)
             {
-                case "engine": entry.Engine = Mathf.Min(3, entry.Engine + 1); break;
-                case "brakes": entry.Brakes = Mathf.Min(3, entry.Brakes + 1); break;
-                case "grip": entry.Grip = Mathf.Min(3, entry.Grip + 1); break;
-                case "armour": entry.Armour = Mathf.Min(3, entry.Armour + 1); break;
+                case "engine": entry.Engine = Mathf.Min(MaxUpgradeLevel, entry.Engine + 1); break;
+                case "brakes": entry.Brakes = Mathf.Min(MaxUpgradeLevel, entry.Brakes + 1); break;
+                case "grip": entry.Grip = Mathf.Min(MaxUpgradeLevel, entry.Grip + 1); break;
+                case "armour": entry.Armour = Mathf.Min(MaxUpgradeLevel, entry.Armour + 1); break;
                 case "respray":
                 {
                     var paint = Services.Vehicles != null ? Services.Vehicles.PickPaint(vehicle.Definition) : Color.grey;
                     entry.PaintR = paint.r; entry.PaintG = paint.g; entry.PaintB = paint.b;
                     Services.Wanted?.AddHeat(-1f, vehicle.transform.position);
+                    ApplyToLiveVehicle(vehicle, entry);
                     GameEvents.Notify("Resprayed", 2.5f);
-                    return;
+                    return true;
                 }
             }
 
             ApplyToLiveVehicle(vehicle, entry);
             GameEvents.Notify("Upgrade installed", 2.5f);
+            return true;
         }
 
         private void ApplyToLiveVehicle(Vehicle vehicle, OwnedVehicle entry)

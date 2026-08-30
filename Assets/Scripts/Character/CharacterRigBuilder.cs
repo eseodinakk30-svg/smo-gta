@@ -119,6 +119,7 @@ namespace SanMonica.Characters
             rig.CacheBindPose();
 
             // ---- Meshes ----
+            rig.Appearance = app;
             rig.HighMesh = BuildBody(go.transform, bones, app, false);
             rig.LowMesh = BuildBody(go.transform, bones, app, true);
 
@@ -135,6 +136,32 @@ namespace SanMonica.Characters
             rig.Renderer = smr;
             rig.SetMeshLod(0);
             return rig;
+        }
+
+        /// <summary>
+        /// Rebuilds only the body meshes for a new appearance, keeping the
+        /// skeleton, the ragdoll hanging off it and everything held in its
+        /// hands. This is what makes a change of clothes or a haircut visible
+        /// rather than a line of text claiming something happened.
+        /// </summary>
+        public static void RebuildBody(CharacterRig rig, in CharacterAppearance app)
+        {
+            if (rig == null || rig.Renderer == null || rig.Bones == null) return;
+
+            // The mesh is authored from where the bones currently are, so the
+            // body has to be back in its bind pose or it is rebuilt mid-stride.
+            rig.ResetToBindPose();
+
+            var oldHigh = rig.HighMesh;
+            var oldLow = rig.LowMesh;
+
+            rig.Appearance = app;
+            rig.HighMesh = BuildBody(rig.transform, rig.Bones, app, false);
+            rig.LowMesh = BuildBody(rig.transform, rig.Bones, app, true);
+            rig.RefreshMesh();
+
+            if (oldHigh != null) Object.Destroy(oldHigh);
+            if (oldLow != null) Object.Destroy(oldLow);
         }
 
         private static Mesh BuildBody(Transform root, Transform[] bones, CharacterAppearance app, bool simplified)

@@ -160,14 +160,34 @@ namespace SanMonica.Data
             return list;
         }
 
-        public List<VehicleDefinition> VehiclesForSale(bool luxuryOnly)
+        /// <summary>
+        /// What a given kind of dealer has on the floor. The old version took a
+        /// single "luxury" flag and applied the car price band to every
+        /// showroom, so the marine and aviation dealers - the only shops that
+        /// sell boats and aircraft at all - silently filtered out four of the
+        /// five aircraft and two of the five boats as "too expensive".
+        /// </summary>
+        public List<VehicleDefinition> VehiclesForSale(DealerStock stock)
         {
             var list = new List<VehicleDefinition>();
             foreach (var v in vehicles)
             {
                 if (v.price <= 0 || v.IsEmergency) continue;
-                if (luxuryOnly && v.price < 90000) continue;
-                if (!luxuryOnly && v.price >= 200000) continue;
+                switch (stock)
+                {
+                    case DealerStock.Marine:
+                        if (!v.IsWatercraft) continue;
+                        break;
+                    case DealerStock.Aviation:
+                        if (!v.IsAircraft) continue;
+                        break;
+                    case DealerStock.Luxury:
+                        if (v.IsWatercraft || v.IsAircraft || v.price < 90000) continue;
+                        break;
+                    default:
+                        if (v.IsWatercraft || v.IsAircraft || v.price >= 200000) continue;
+                        break;
+                }
                 list.Add(v);
             }
             return list;

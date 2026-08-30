@@ -10,6 +10,9 @@ namespace SanMonica.Data
         AmmuNation, Nightclub, Hardware, Marine, Aviation
     }
 
+    /// <summary>Which part of the vehicle catalogue a showroom carries.</summary>
+    public enum DealerStock { Everyday, Luxury, Marine, Aviation }
+
     [System.Serializable]
     public class ShopDefinition
     {
@@ -107,6 +110,10 @@ namespace SanMonica.Data
                 new ShopDefinition { id="club", displayName="Static Room", type=ShopType.Nightclub,
                     openHour=21, closeHour=5, signColor=new Color(0.75f,0.20f,0.85f),
                     districts=new[]{ DistrictType.Downtown, DistrictType.Marigold, DistrictType.Beach } },
+
+                new ShopDefinition { id="armoury", displayName="Vela Armoury", type=ShopType.AmmuNation,
+                    priceMultiplier=0.85f, openHour=0, closeHour=0, signColor=new Color(0.72f,0.20f,0.18f),
+                    districts=new[]{ DistrictType.Industrial, DistrictType.Port, DistrictType.Badlands, DistrictType.Marigold } },
 
                 new ShopDefinition { id="hardware", displayName="Foundry Supply", type=ShopType.Hardware,
                     openHour=7, closeHour=19, signColor=new Color(0.60f,0.45f,0.25f),

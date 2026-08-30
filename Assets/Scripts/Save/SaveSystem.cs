@@ -20,7 +20,8 @@ namespace SanMonica.Saves
         public float PlaySeconds { get; private set; }
         public int Kills { get; private set; }
         public int VehiclesDestroyed { get; private set; }
-        public int Outfit { get; private set; }
+        public int Outfit { get; private set; } = -1;
+        public int Hairstyle { get; private set; } = -1;
 
         private float _autoSaveTimer;
         public float AutoSaveIntervalSeconds = 300f;
@@ -55,6 +56,7 @@ namespace SanMonica.Saves
         }
 
         public void SetOutfit(int outfit) => Outfit = outfit;
+        public void SetHairstyle(int hairstyle) => Hairstyle = hairstyle;
 
         // ------------------------------------------------------------------
         public SaveData Capture()
@@ -140,6 +142,7 @@ namespace SanMonica.Saves
 
             data.radioStation = Services.Radio != null ? Services.Radio.CaptureState() : -1;
             data.outfit = Outfit;
+            data.hairstyle = Hairstyle;
             data.playSeconds = PlaySeconds;
             data.kills = Kills;
             data.vehiclesDestroyed = VehiclesDestroyed;
@@ -237,6 +240,9 @@ namespace SanMonica.Saves
 
             Services.Radio?.RestoreState(data.radioStation);
             Outfit = data.outfit;
+            Hairstyle = data.hairstyle;
+            // The saved look was written down and then never worn again.
+            Services.Player?.RestoreAppearance(Outfit, Hairstyle);
             PlaySeconds = data.playSeconds;
             Kills = data.kills;
             VehiclesDestroyed = data.vehiclesDestroyed;

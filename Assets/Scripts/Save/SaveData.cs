@@ -52,7 +52,8 @@ namespace SanMonica.Saves
         // Player
         public float px, py, pz, heading;
         public float health = 200f, maxHealth = 200f, armour;
-        public int outfit;
+        public int outfit = -1;
+        public int hairstyle = -1;
         public bool inVehicle;
         public string vehicleDefinitionId;
 

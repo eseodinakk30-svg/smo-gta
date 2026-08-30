@@ -462,13 +462,40 @@ namespace SanMonica.UI
 
                 var buyRect = UIBuilder.Anchored("Buy", row, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(230f, 46f));
                 var captured = offer;
-                UIBuilder.Button(buyRect, "$" + offer.Price.ToString("N0"),
-                    new Color(0.18f, 0.34f, 0.24f, 0.98f), UIBuilder.TextPrimary,
-                    () => { if (Services.Shops.Purchase(in captured)) PopulateShop(); }, 20);
+
+                // The shop used to offer a green Buy button for the shirt you
+                // are already wearing and the car you already own. Say so.
+                if (offer.Owned)
+                {
+                    var disabled = UIBuilder.Button(buyRect, OwnedLabel(offer.Kind),
+                        new Color(0.16f, 0.17f, 0.20f, 0.98f), UIBuilder.TextMuted, null, 19);
+                    if (disabled != null) disabled.interactable = false;
+                }
+                else
+                {
+                    long balance = Services.Economy != null ? Services.Economy.Money : 0L;
+                    bool affordable = balance >= offer.Price;
+                    UIBuilder.Button(buyRect, "$" + offer.Price.ToString("N0"),
+                        affordable ? new Color(0.18f, 0.34f, 0.24f, 0.98f) : new Color(0.34f, 0.18f, 0.18f, 0.98f),
+                        affordable ? UIBuilder.TextPrimary : UIBuilder.TextMuted,
+                        () => { if (Services.Shops.Purchase(in captured)) PopulateShop(); }, 20);
+                }
 
                 cursor += 72f;
             }
             _shopContent.sizeDelta = new Vector2(0f, cursor + 20f);
+        }
+
+        private static string OwnedLabel(SanMonica.Economy.ShopOfferKind kind)
+        {
+            switch (kind)
+            {
+                case SanMonica.Economy.ShopOfferKind.Clothing: return "WORN";
+                case SanMonica.Economy.ShopOfferKind.Haircut: return "CURRENT";
+                case SanMonica.Economy.ShopOfferKind.PayFines: return "NOTHING DUE";
+                case SanMonica.Economy.ShopOfferKind.Vehicle: return "GARAGE FULL";
+                default: return "OWNED";
+            }
         }
 
         // ------------------------------------------------------------------

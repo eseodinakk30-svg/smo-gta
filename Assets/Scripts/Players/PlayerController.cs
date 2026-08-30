@@ -124,6 +124,42 @@ namespace SanMonica.Players
             _fallStartY = transform.position.y;
         }
 
+        // ------------------------------------------------------------------
+        /// <summary>Which set of clothes is worn. -1 is the body's own look.</summary>
+        public int OutfitIndex { get; private set; } = -1;
+        public int HairstyleIndex { get; private set; } = -1;
+
+        /// <summary>Puts on a different outfit and rebuilds the body to match.</summary>
+        public void SetOutfit(int index)
+        {
+            OutfitIndex = Mathf.Clamp(index, 0, Wardrobe.Outfits.Length - 1);
+            ApplyAppearance();
+        }
+
+        /// <summary>Changes the cut and colour and rebuilds the body to match.</summary>
+        public void SetHairstyle(int index)
+        {
+            HairstyleIndex = Mathf.Clamp(index, 0, Wardrobe.Hairstyles.Length - 1);
+            ApplyAppearance();
+        }
+
+        private void ApplyAppearance()
+        {
+            if (Rig == null) return;
+            var appearance = Rig.Appearance;
+            if (OutfitIndex >= 0) appearance = Wardrobe.With(appearance, Wardrobe.Outfit(OutfitIndex));
+            if (HairstyleIndex >= 0) appearance = Wardrobe.With(appearance, Wardrobe.Hair(HairstyleIndex));
+            CharacterRigBuilder.RebuildBody(Rig, appearance);
+        }
+
+        /// <summary>Restores a saved look without charging for it again.</summary>
+        public void RestoreAppearance(int outfit, int hairstyle)
+        {
+            OutfitIndex = outfit >= 0 ? Mathf.Clamp(outfit, 0, Wardrobe.Outfits.Length - 1) : -1;
+            HairstyleIndex = hairstyle >= 0 ? Mathf.Clamp(hairstyle, 0, Wardrobe.Hairstyles.Length - 1) : -1;
+            if (OutfitIndex >= 0 || HairstyleIndex >= 0) ApplyAppearance();
+        }
+
         public void Teleport(Vector3 position, float heading)
         {
             Controller.enabled = false;
@@ -437,6 +473,13 @@ namespace SanMonica.Players
                 else Services.Missions?.TryInteract(transform.position);
             }
         }
+
+        /// <summary>
+        /// The vehicle a shop counter should work on. You reach a counter on
+        /// foot, so a fuel pump or a ramp has to look at the car parked outside.
+        /// </summary>
+        public Vehicle ServiceableVehicle(float radius = 18f)
+            => CurrentVehicle != null ? CurrentVehicle : FindNearestVehicle(radius);
 
         private Vehicle FindNearestVehicle(float radius)
         {

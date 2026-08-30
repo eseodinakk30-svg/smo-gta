@@ -95,9 +95,8 @@ namespace SanMonica.AI
             for (int i = 0; i < _nodePath.Count; i++)
             {
                 var node = _roads.Nodes[_nodePath[i]];
-                Vector3 p = new Vector3(node.Pos.x, 0f, node.Pos.y);
-                p.y = _map.SampleHeight(p.x, p.z) + 0.15f;
-                outPath.Add(p);
+                float y = _roads.NodeSurfaceHeight(_nodePath[i]) + 0.15f;
+                outPath.Add(new Vector3(node.Pos.x, y, node.Pos.y));
             }
             outPath.Add(to);
             return true;

@@ -96,7 +96,10 @@ namespace SanMonica.AI
                 var archetype = _db.PickPed(ref _rng, district, hour);
                 if (archetype == null) continue;
 
-                point.y = _map.SampleHeight(point.x, point.z) + 0.1f;
+                // SnapToWalkable already returned a point on the pavement, at the
+                // right height for a bridge as well. Overwriting it with the
+                // terrain sank every pedestrian into the kerb and dropped the ones
+                // on a bridge into the water.
                 var brain = _factory.Spawn(archetype, point, Quaternion.Euler(0f, _rng.Value * 360f, 0f));
                 if (brain != null) return;
             }

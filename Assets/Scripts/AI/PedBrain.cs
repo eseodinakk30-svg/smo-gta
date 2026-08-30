@@ -418,7 +418,10 @@ namespace SanMonica.AI
             if (delta.magnitude < 1.5f) { _pathIndex++; return; }
             Vector3 step = delta.normalized * speed * dt;
             Vector3 next = transform.position + step;
-            next.y = Services.Map != null ? Services.Map.SampleHeight(next.x, next.z) : next.y;
+            // Follow the height the path itself carries rather than resampling the
+            // terrain: the path runs along pavements and over bridge decks, and
+            // the height field underneath is the bed of the bay.
+            next.y = Mathf.Lerp(transform.position.y, target.y, Mathf.Clamp01(dt * 6f));
             transform.position = next;
             transform.rotation = Quaternion.LookRotation(delta.normalized);
         }

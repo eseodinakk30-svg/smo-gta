@@ -612,6 +612,26 @@ namespace SanMonica.World
         private float SurfaceHeight(in RoadSegment s, float t, Vector2 at)
             => s.IsBridge ? s.DeckAt(t) : _map.SampleHeight(at.x, at.y);
 
+        /// <summary>
+        /// Surface height at a junction. A junction where a bridge lands is up on
+        /// the deck, not down on the bed, and paths routed through it have to say
+        /// so or everything walking the path drops into the water.
+        /// </summary>
+        public float NodeSurfaceHeight(int nodeIndex)
+        {
+            if (nodeIndex < 0 || nodeIndex >= Nodes.Count) return 0f;
+            var node = Nodes[nodeIndex];
+            float best = _map.SampleHeight(node.Pos.x, node.Pos.y);
+            for (int i = 0; i < node.Segments.Count; i++)
+            {
+                var s = Segments[node.Segments[i]];
+                if (!s.IsBridge) continue;
+                float deck = s.NodeA == nodeIndex ? s.DeckAt(0f) : s.DeckAt(1f);
+                if (deck > best) best = deck;
+            }
+            return best;
+        }
+
         public Vector3 LanePoint(int segIndex, int lane, bool forward, float t)
         {
             var s = Segments[segIndex];

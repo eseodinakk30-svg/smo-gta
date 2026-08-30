@@ -63,6 +63,9 @@ namespace SanMonica.AI
         private float _threatLastSeen;
         private Vector3 _threatLastPosition;
         private bool _warned;
+        private RoleProfile _profile;
+        private Vector3 _post;
+        private float _idleUntil;
 
         public float DistanceToPlayer { get; private set; }
         public bool InVehicle => CurrentVehicle != null;
@@ -96,6 +99,11 @@ namespace SanMonica.AI
             _spawnTime = Time.time;
             _initialised = true;
             _morale = Mathf.Clamp01(0.55f + archetype.bravery * 0.45f);
+            // A jogger, a guard, a vendor and a tourist now spend their day
+            // differently instead of all walking to a random point and pausing.
+            _profile = RoleProfile.For(archetype.role);
+            _post = transform.position;
+            _idleUntil = 0f;
             _threatLastSeen = 0f;
             _warned = false;
             ClearCover();
@@ -231,10 +239,14 @@ namespace SanMonica.AI
 
             if (_reportTimer > 0f) _reportTimer -= _thinkTimer;
 
-            // Idle behaviour driven by the archetype and the clock.
-            if (State == PedState.Wander && _stateTimer > _rng.Range(18f, 45f))
-                EnterState(_rng.Chance(0.4f) ? PedState.Idle : PedState.Wander);
-            else if (State == PedState.Idle && _stateTimer > _rng.Range(3f, 9f))
+            // Idle behaviour driven by the role, the archetype and the clock.
+            if (State == PedState.Wander && _stateTimer > _rng.Range(_profile.WanderMin, _profile.WanderMax))
+            {
+                if (_rng.Chance(_profile.WorkChance)) EnterState(PedState.Working);
+                else if (_rng.Chance(_profile.IdleChance)) EnterState(PedState.Idle);
+                else EnterState(PedState.Wander);
+            }
+            else if (State == PedState.Idle && _stateTimer > _idleUntil)
                 EnterState(PedState.Wander);
         }
 
@@ -309,6 +321,9 @@ namespace SanMonica.AI
                 case PedState.Wander:
                     PickWanderDestination();
                     break;
+                case PedState.Idle:
+                    _idleUntil = _rng.Range(_profile.IdleMin, _profile.IdleMax);
+                    break;
                 case PedState.Flee:
                 {
                     Vector3 away = transform.position - Perception.LastHeardPosition;
@@ -341,17 +356,18 @@ namespace SanMonica.AI
 
         private void TickWander(float dt)
         {
-            if (FollowPath(dt, Archetype != null ? Archetype.walkSpeed : 1.3f)) PickWanderDestination();
+            if (FollowPath(dt, RoleSpeed())) PickWanderDestination();
         }
 
         private void TickGoTo(float dt)
         {
-            if (FollowPath(dt, Archetype != null ? Archetype.walkSpeed : 1.3f)) EnterState(PedState.Idle);
+            if (FollowPath(dt, RoleSpeed())) EnterState(PedState.Idle);
         }
 
         private void TickWorking(float dt)
         {
             Move(Vector3.zero, 0f, dt);
+            // Face the work rather than whatever direction they arrived from.
             if (_stateTimer > 20f) EnterState(PedState.Wander);
         }
 
@@ -634,7 +650,7 @@ namespace SanMonica.AI
             Vector3 target = _path[_pathIndex];
             Vector3 delta = target - transform.position;
             delta.y = 0f;
-            float speed = Archetype != null ? Archetype.walkSpeed : 1.3f;
+            float speed = RoleSpeed();
             if (delta.magnitude < 1.5f) { _pathIndex++; return; }
             Vector3 step = delta.normalized * speed * dt;
             Vector3 next = transform.position + step;
@@ -650,8 +666,36 @@ namespace SanMonica.AI
         private void PickWanderDestination()
         {
             if (Services.Nav == null) return;
-            Vector3 point = Services.Nav.RandomWalkPoint(transform.position, _rng.Range(20f, 70f), ref _rng);
+            float radius = _rng.Range(Mathf.Max(1f, _profile.RadiusMin), Mathf.Max(2f, _profile.RadiusMax));
+
+            // Guards, vendors, dockworkers and corner crews have a post. They
+            // move around it rather than drifting off across the district.
+            Vector3 from = transform.position;
+            if (_profile.PostRadius > 0.5f &&
+                (transform.position - _post).sqrMagnitude > _profile.PostRadius * _profile.PostRadius)
+            {
+                SetDestination(Services.Nav.SnapToWalkable(_post, 30f));
+                return;
+            }
+
+            Vector3 point = Services.Nav.RandomWalkPoint(from, radius, ref _rng);
+            if (_profile.PostRadius > 0.5f)
+            {
+                Vector3 offset = point - _post;
+                offset.y = 0f;
+                if (offset.magnitude > _profile.PostRadius)
+                    point = Services.Nav.SnapToWalkable(_post + offset.normalized * _profile.PostRadius, 20f);
+            }
             SetDestination(point);
+        }
+
+        /// <summary>Walking pace for this role: a jogger runs, a drifter shuffles.</summary>
+        private float RoleSpeed()
+        {
+            float baseSpeed = Archetype != null ? Archetype.walkSpeed : 1.3f;
+            float speed = baseSpeed * Mathf.Max(0.2f, _profile.SpeedScale);
+            float cap = Archetype != null ? Archetype.sprintSpeed : 5.4f;
+            return Mathf.Min(speed, cap);
         }
 
         public void SetDestination(Vector3 destination)
@@ -757,6 +801,7 @@ namespace SanMonica.AI
 
             transform.SetParent(null, true);
             transform.position = exit;
+            _post = exit;                 // wherever they got out is their new beat
             if (Controller != null && Health != null && Health.IsAlive) Controller.enabled = true;
             if (Animator != null) { Animator.Sitting = false; Animator.Driving = false; }
             EnterState(Health != null && Health.IsAlive ? PedState.Flee : PedState.Dead);
@@ -829,6 +874,8 @@ namespace SanMonica.AI
             _threatLastSeen = 0f;
             _hasCover = false;
             _coverTimer = 0f;
+            _post = transform.position;
+            _idleUntil = 0f;
             State = PedState.Wander;
             _initialised = false;
         }

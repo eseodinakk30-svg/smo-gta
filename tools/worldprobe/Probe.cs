@@ -677,6 +677,23 @@ internal static class Probe
         if (emptySlots > 0) Fail($"{emptySlots} district/hour combinations spawn no pedestrians at all");
         if (db.Ped("citizen") == null) Fail("archetype 'citizen' is missing - PickPed's fallback returns null");
 
+        // Every role has to produce a workable daily routine; a zero radius or
+        // an inverted min/max would freeze that archetype in place for ever.
+        foreach (PedRole role in Enum.GetValues(typeof(PedRole)))
+        {
+            var profile = SanMonica.AI.RoleProfile.For(role);
+            if (profile.SpeedScale <= 0f) Fail($"role {role} walks at zero speed");
+            if (profile.RadiusMax <= 0f || profile.RadiusMin > profile.RadiusMax)
+                Fail($"role {role} has an unusable wander radius ({profile.RadiusMin}..{profile.RadiusMax})");
+            if (profile.IdleMax <= 0f || profile.IdleMin > profile.IdleMax)
+                Fail($"role {role} has an unusable idle window");
+            if (profile.WanderMax <= 0f || profile.WanderMin > profile.WanderMax)
+                Fail($"role {role} has an unusable wander window");
+            if (profile.PostRadius > 0f && profile.PostRadius < profile.RadiusMin)
+                Fail($"role {role} is posted inside a radius smaller than its own steps");
+        }
+        Console.WriteLine($"roles: {Enum.GetValues(typeof(PedRole)).Length} daily routines defined");
+
         int emptyTraffic = 0;
         foreach (var d in districts)
             if (db.PickTrafficVehicle(ref rng, d) == null) emptyTraffic++;
